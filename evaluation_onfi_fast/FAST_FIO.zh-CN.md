@@ -64,3 +64,10 @@ python3 evaluation_onfi_fast/summarize_fio.py evaluation_onfi_fast/results/new-f
 ```
 
 三个模块开关均为加载时参数，卸载/重载后切换；不在有在途 I/O 时动态修改。
+
+## 已完成结果
+
+[正式四组报告](reports/fio-fast-16g-v1/SUMMARY.md)：96 项全部通过，三轮独立重建。
+吞吐、读写平均/P99、ONFI 等待、实际策略应用、每轮原始日志均已归档。
+效果随负载而变，包含小幅提升和性能下降，完整比较见
+[中文结果分析](RESULTS.zh-CN.md#常规-fio同时开启-onfi-与-fast-覆盖策略)。

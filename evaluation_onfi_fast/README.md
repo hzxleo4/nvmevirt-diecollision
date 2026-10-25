@@ -91,6 +91,15 @@ reads lose 11.61%, 22.21%, and 29.47% throughput with ONFI enabled; 32 KiB
 All cases use the same 2 GiB prefilled working set and 2 GiB measured I/O volume,
 with no GC. This is a separate ONFI experiment, not a FAST paper workload.
 
+The [four-group FAST fio report](reports/fio-fast-16g-v1/SUMMARY.md) adds 96
+validated runs with the default-off raw-LBA overwrite adapter enabled in every
+group. Only C/D apply the original-die policy. With ONFI enabled, FAST changes
+4 KiB QD32 throughput by -0.96%, +0.29%, and +3.72%
+for 70%, 50%, and 30% reads; 32 KiB 50/50 QD32 changes by -12.19%.
+Fewer ONFI waits do not imply throughput recovery. All policy application
+counts match overwritten mapping pages; all data checks pass with no GC.
+This is a raw-fio overwrite adaptation, not the filesystem append/hint path.
+
 The primary measured report is [main-16g-aio-v1](reports/main-16g-aio-v1/SUMMARY.md):
 three independent constructions per group/layout, ten complete reads each,
 600 measured passes. With ONFI enabled, FAST improves worst-case append and
@@ -116,6 +125,14 @@ retain the original default device selection. Both feature switches are module
 parameters: `onfi_collision=0|1 fast_placement=0|1`. They do not require a
 rebuild. Reloading creates a clean experiment boundary and avoids applying a
 new hardware rule to already scheduled commands. Live switching is not exposed.
+
+For prefilled raw-device fio, `fast_infer_overwrite=1` is a separate, default-off
+adapter that recognizes overwrites of mapped LBAs inside NVMeVirt. Together
+with `fast_placement=1`, it applies FAST's original-die overwrite rule without
+host hints. Explicit hints retain precedence; unmapped LBAs use the ordinary
+allocator. It does not infer file append or adjacency. See the
+[four-group FAST fio protocol](FAST_FIO.zh-CN.md), including counters that
+distinguish an enabled switch from actual policy applications.
 
 The implementation uses one allocator and a 4 MiB write buffer for all groups.
 Programs release buffer space at completion, and flush/read of a partial page
@@ -172,11 +189,11 @@ this specific overlap pattern. It must not be presented as the paper's ONFI cost
 | Paper evaluation | Current coverage | Scope difference |
 |---|---|---|
 | Hypothetical append/overwrite | Four groups, contiguous/worst/random layouts, completed | Explicit hints and raw device reads instead of ext4 and 1 MiB application read syscalls |
-| SQLite: 10,000 records, approximately 16 KiB, 100 KiB interference | Protocol reviewed; application run pending | Stock host does not produce file hints |
-| Filebench fileserver: 10,000 initial 128 KiB files, 10 threads, 32/16 KiB appends | Protocol reviewed; application run pending | Stock host does not produce file hints; published script appends for 30 s while paper describes 60 s |
+| SQLite: 10,000 records, approximately 16 KiB, 100 KiB interference | ONFI-only application A/B completed; FAST-hinted application pending | Stock host does not produce file hints |
+| Filebench fileserver: 10,000 initial 128 KiB files, 10 threads, 32/16 KiB appends | ONFI-only application A/B completed; FAST-hinted application pending | Fixed 4 GiB append budget fits this host; stock host does not produce file hints; artifact uses 30 s versus the paper's 60 s append |
 
 The device sees LBAs, not filenames. Without file hints, treating adjacent LBAs
 as adjacent file blocks would change the method being tested. Full application
-numbers must therefore remain pending until a validated hint transport or an
+FAST-hinted numbers must therefore remain pending until a validated hint transport or an
 explicitly labeled application-trace replay is available. No host-kernel
 installation/reboot is part of the current test workflow.

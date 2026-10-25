@@ -4,8 +4,9 @@
 
 This experiment isolates the ONFI multi-LUN page-register restriction described
 in CLSSD from the page-to-die placement policy in Jun et al., FAST '24.
-The workload definitions follow FAST '24; CLSSD's fio/BigTrace evaluation is
-not the workload set for this repository.
+The paper-reproduction workload definitions follow FAST '24. The separate
+[ordinary fio ONFI suite](FIO.zh-CN.md) checks uniform random mixed I/O;
+it is not labeled as a FAST paper workload or the full CLSSD evaluation.
 
 ## Experiment contract
 
@@ -82,6 +83,13 @@ observed throughput differences include different layouts from concurrent
 construction. Small construction waits are reported separately. All repetitions,
 raw counters, logs and validation hashes are retained; this does not constitute
 the FAST-hinted application experiment.
+
+The [ordinary fio report](reports/fio-onfi-16g-v1/SUMMARY.md) adds 48 validated
+fixed-volume A/B runs. At QD32, 4 KiB random workloads with 70%, 50%, and 30%
+reads lose 11.61%, 22.21%, and 29.47% throughput with ONFI enabled; 32 KiB
+50/50 loses 18.08%. Pure-read, pure-write and QD1 controls record no ONFI waits.
+All cases use the same 2 GiB prefilled working set and 2 GiB measured I/O volume,
+with no GC. This is a separate ONFI experiment, not a FAST paper workload.
 
 The primary measured report is [main-16g-aio-v1](reports/main-16g-aio-v1/SUMMARY.md):
 three independent constructions per group/layout, ten complete reads each,

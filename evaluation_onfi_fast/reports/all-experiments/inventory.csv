@@ -11,3 +11,5 @@ apps-smoke-v1,failed,2,Filebench error in /home/hzx/Github_Program/nvmevirt/eval
 apps-smoke-v2,failed,2,unexpected append volume: 33501184
 apps-smoke-v3,passed,6,
 apps-onfi-16g-v1,passed,18,
+fio-onfi-smoke-v1,passed,16,
+fio-onfi-16g-v1,passed,48,

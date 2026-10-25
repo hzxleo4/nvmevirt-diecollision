@@ -1,0 +1,194 @@
+{
+  "suite": "fio_random_onfi",
+  "status": "passed",
+  "smoke": true,
+  "git_head": "5c07641a59da82799f3a4288a545f26a74664583",
+  "git_status": "?? evaluation_onfi_fast/run_fio.py",
+  "kernel": "6.8.0-138-generic",
+  "fio": "fio-3.28",
+  "physical_bytes": 17179869184,
+  "working_bytes": 16777216,
+  "io_bytes": 33554432,
+  "fast_placement": false,
+  "cpus": "7,8,9,10",
+  "host_cpu": 3,
+  "plan": [
+    {
+      "repeat": 1,
+      "case": "4k-r100-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 100,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r100-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 100,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r0-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 0,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r0-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 0,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r70-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 70,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r70-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 70,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r50-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 50,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r50-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 50,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r30-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 30,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r30-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 30,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r50-qd1",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 50,
+      "qd": 1
+    },
+    {
+      "repeat": 1,
+      "case": "4k-r50-qd1",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 4,
+      "read_percent": 50,
+      "qd": 1
+    },
+    {
+      "repeat": 1,
+      "case": "32k-r50-qd32",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 32,
+      "read_percent": 50,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "32k-r50-qd32",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 32,
+      "read_percent": 50,
+      "qd": 32
+    },
+    {
+      "repeat": 1,
+      "case": "32k-r50-qd1",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027,
+      "bs_kib": 32,
+      "read_percent": 50,
+      "qd": 1
+    },
+    {
+      "repeat": 1,
+      "case": "32k-r50-qd1",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027,
+      "bs_kib": 32,
+      "read_percent": 50,
+      "qd": 1
+    }
+  ],
+  "notes": [
+    "ordinary uniform random fio requests, no die selection or hints",
+    "fixed I/O volume; no time_based or steady-state claim",
+    "fresh sequential prefill and explicit NVMe FLUSH before measurement",
+    "post-test full-range constant-pattern verification is outside measurement",
+    "constant pattern verifies bytes but does not detect aliases between identically filled LBAs",
+    "measured fio counters and final explicit FLUSH counters are separate"
+  ],
+  "source_sha256": {
+    "evaluation_onfi_fast/run_fio.py": "f83f6f29d460f86a8927b2d7dc73c081f3cb3e527704ea47babbcd08c1c47d06",
+    "fast24_ftl.c": "d23cff1c555261a21cfb15aab7981d87920f6f04c06796fed39fca67fa0a94e7",
+    "ssd.c": "78e7a40f2129de4119e403147f04ac90f3d13671dd15598639ac6537088a8a51",
+    "ssd_config.h": "69c0be471e85444b079182cbb7d90d7e4616196f11f7a373d3cb97e03181742a",
+    "onfi_model.h": "f871592631a235bb349e8522d77ea3a4713c0e876ff955f3fb94c95738237eb7",
+    "admin.c": "6983c5ccced41e7accc6ae79c4502d1624d89a528d0481fa5c59c92b3147d454",
+    "Kbuild": "a4d02df6984239f141afbb52333011574cde9afec2a70f9fa3d7697de892a574"
+  }
+}

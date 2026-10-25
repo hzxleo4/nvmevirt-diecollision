@@ -1,2 +1,3 @@
 # Keep the small application audit bundles with their reports.
 !apps-*/raw-results.tar.gz
+!fio-onfi-*/raw-results.tar.gz

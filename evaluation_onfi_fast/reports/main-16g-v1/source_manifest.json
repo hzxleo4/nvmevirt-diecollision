@@ -1,0 +1,556 @@
+{
+  "suite": "device_mechanism",
+  "host_hint_path": "explicit_nvme_ioctl",
+  "kernel": "6.8.0-138-generic",
+  "git_head": "3b6d21b39e81e00ddcd58167aa702b7caa6f823a",
+  "git_status": "",
+  "cmdline": "BOOT_IMAGE=/boot/vmlinuz-6.8.0-138-generic root=UUID=445cbd7b-787a-48b9-bf93-5746218abc46 ro memmap=16G$8G quiet splash vt.handoff=7",
+  "cpus": "7,8,9,10",
+  "physical_bytes": 17179869184,
+  "onfi_topology": "one target per channel, two LUNs per target",
+  "channel_MiB_per_second": 800,
+  "iodepth": 32,
+  "plan": [
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "append_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "overwrite_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "append_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_worst",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "overwrite_random",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 10
+    }
+  ],
+  "status": "passed"
+}

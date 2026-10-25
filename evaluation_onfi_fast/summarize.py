@@ -37,6 +37,7 @@ def main():
     ap.add_argument("--output", type=Path, required=True)
     a = ap.parse_args()
     manifest = json.loads((a.result / "manifest.json").read_text())
+    timer = manifest.get("timer", "fio")
     if manifest["status"] != "passed":
         raise SystemExit("Refusing incomplete/failed experiment")
     rows = []
@@ -53,18 +54,28 @@ def main():
                              **diff})
         for i in range(1, item["reads"] + 1):
             data = json.loads((folder / f"read{i}.json").read_text())
-            if len(data["jobs"]) != 1:
-                raise SystemExit("expected one fio job")
-            job = data["jobs"][0]
-            read = job["read"]
-            if job["error"] or read["io_bytes"] != 8388608 or read["clat_ns"]["N"] != 256:
-                raise SystemExit("Incomplete fio replay")
+            if timer == "aio":
+                if data["io_bytes"] != 8388608 or data["completed"] != 256 or not data["verified"]:
+                    raise SystemExit("Incomplete AIO pass")
+                bandwidth = data["MiB_s"]
+                mean_lat = data["mean_submission_to_reap_us"]
+                p99 = data["p99_submission_to_reap_us"]
+                duration_ms = data["elapsed_ns"] / 1e6
+            else:
+                if len(data["jobs"]) != 1:
+                    raise SystemExit("expected one fio job")
+                job = data["jobs"][0]
+                read = job["read"]
+                if job["error"] or read["io_bytes"] != 8388608 or read["clat_ns"]["N"] != 256:
+                    raise SystemExit("Incomplete fio replay")
+                bandwidth = read["bw_bytes"] / 1024**2
+                mean_lat = read["lat_ns"]["mean"] / 1000
+                p99 = read["clat_ns"]["percentile"]["99.000000"] / 1000
+                duration_ms = read["runtime"]
             diff = delta(stats(folder / f"read{i}.after.stats"), stats(folder / f"read{i}.before.stats"))
             rows.append({"group": item["group"], "case": item["case"], "repeat": item["repeat"],
-                         "read": i, "MiB_s": read["bw_bytes"] / 1024**2,
-                         "mean_lat_us": read["lat_ns"]["mean"] / 1000,
-                         "p99_clat_us": read["clat_ns"]["percentile"]["99.000000"] / 1000,
-                         "runtime_ms": read["runtime"], **diff})
+                         "read": i, "MiB_s": bandwidth, "mean_lat_us": mean_lat,
+                         "p99_lat_us": p99, "runtime_ms": duration_ms, **diff})
     a.output.mkdir(parents=True, exist_ok=True)
     write_csv(a.output / "reads.csv", rows)
     write_csv(a.output / "construction.csv", construction)
@@ -77,12 +88,15 @@ def main():
                            "MiB_s": statistics.mean(values),
                            "stdev_MiB_s": statistics.stdev(values) if len(values) > 1 else 0,
                            "mean_lat_us": statistics.mean(r["mean_lat_us"] for r in selected),
-                           "mean_p99_clat_us": statistics.mean(r["p99_clat_us"] for r in selected),
+                           "mean_p99_lat_us": statistics.mean(r["p99_lat_us"] for r in selected),
                            "onfi_events": sum(r["onfi_events"] for r in selected),
                            "onfi_ns": sum(r["onfi_ns"] for r in selected),
                            "programs": sum(r["programs"] for r in selected)})
-    write_csv(a.output / "aggregate.csv", aggregates)
     lookup = {(r["group"], r["case"]): r for r in aggregates}
+    for r in aggregates:
+        base = lookup.get((r["group"], "contiguous"))
+        r["normalized_to_contiguous"] = r["MiB_s"] / base["MiB_s"] if base else ""
+    write_csv(a.output / "aggregate.csv", aggregates)
     comparisons = []
     for case in sorted({r["case"] for r in rows}):
         for label, base, treatment in (("ONFI cost B/A", "A", "B"), ("FAST with ONFI C/B", "B", "C"),
@@ -100,17 +114,21 @@ def main():
               "16 GiB physical reservation; 4 channels × 2 dies; 32 KiB flash pages.",
               "Each read sample is a complete 8 MiB pass (256 completed commands).",
               "Samples within one layout reuse that layout; they are not independent reconstruction trials.",
-              "Mean latency uses fio lat; P99 uses clat. Averaged P99 values are not a pooled P99.",
+              ("Timing uses CLOCK_MONOTONIC nanoseconds around a complete Linux AIO pass. Latency is userspace submission-to-reap."
+               if timer == "aio" else "Mean latency uses fio lat; P99 uses clat. fio burst duration is quantized to milliseconds."),
+              "Averaged P99 values are not a pooled P99.",
               "", "| Group | Case | MiB/s | Stddev | Mean µs | Mean P99 µs | ONFI waits |", "|---|---|---:|---:|---:|---:|---:|"]
     for r in aggregates:
         report.append(f"| {r['group']} | {r['case']} | {r['MiB_s']:.2f} | {r['stdev_MiB_s']:.2f} | "
-                      f"{r['mean_lat_us']:.2f} | {r['mean_p99_clat_us']:.2f} | {r['onfi_events']} |")
+                      f"{r['mean_lat_us']:.2f} | {r['mean_p99_lat_us']:.2f} | {r['onfi_events']} |")
     report += ["", "| Case | Comparison | Throughput change |", "|---|---|---:|"]
     for r in comparisons:
         report.append(f"| {r['case']} | {r['comparison']} | {r['throughput_change_percent']:+.2f}% |")
     report += ["", "Read-phase programs: " + str(sum(r["programs"] for r in rows)) + ".",
                "Read-phase ONFI waits: " + str(sum(r["onfi_events"] for r in rows)) + ".",
                "Construction counters and wall time are in construction.csv; they are separate from read performance."]
+    if not sum(r["onfi_events"] for r in rows):
+        report += ["", "No ONFI program-vs-read wait was exercised in the read phase. A/B and C/D throughput differences here must not be interpreted as an ONFI penalty; they include run-to-run measurement variation."]
     (a.output / "SUMMARY.md").write_text("\n".join(report) + "\n")
     (a.output / "source_manifest.json").write_text(json.dumps(manifest, indent=2))
     print(a.output / "SUMMARY.md")

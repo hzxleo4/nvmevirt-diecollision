@@ -27,6 +27,7 @@
 static int fd, nsid;
 static void *buffer;
 static uint64_t capacity, rng = 1;
+static unsigned random_max_units = 1024;
 
 static void fail(const char *s)
 {
@@ -39,7 +40,7 @@ static uint32_t random_unit(void)
 	rng ^= rng << 13;
 	rng ^= rng >> 7;
 	rng ^= rng << 17;
-	return 1 + rng % 1024;
+	return 1 + rng % random_max_units;
 }
 
 static double seconds(void)
@@ -140,10 +141,12 @@ int main(int argc, char **argv)
 	int overwrite, random, contiguous;
 	double begin, construction, verified;
 	FILE *log;
-	if (argc != 5) {
-		fprintf(stderr, "usage: %s DEVICE contiguous|append_worst|append_random|overwrite_worst|overwrite_random SEED IOLOG\n", argv[0]);
+	if (argc != 5 && argc != 6) {
+		fprintf(stderr, "usage: %s DEVICE contiguous|append_worst|append_random|overwrite_worst|overwrite_random SEED IOLOG [RANDOM_MAX_UNITS]\n", argv[0]);
 		return 2;
 	}
+	if (argc == 6) random_max_units = strtoul(argv[5], NULL, 10);
+	if (!random_max_units || random_max_units > 1024) return 2;
 	contiguous = !strcmp(argv[2], "contiguous");
 	overwrite = !strncmp(argv[2], "overwrite_", 10);
 	random = strstr(argv[2], "random") != NULL;

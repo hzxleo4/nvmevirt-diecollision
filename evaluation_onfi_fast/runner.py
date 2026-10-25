@@ -89,6 +89,10 @@ def main():
     ap.add_argument("--iodepth", type=int, default=32)
     ap.add_argument("--seed", type=int, default=20261025)
     ap.add_argument("--cpus", default="7,8,9,10")
+    ap.add_argument("--host-cpu", type=int, default=3)
+    ap.add_argument("--timer", choices=("fio", "aio"), default="fio")
+    ap.add_argument("--random-max-units", type=int, choices=(32, 1024), default=1024,
+                    help="32 reproduces artifact range; 1024 reproduces paper text")
     ap.add_argument("--out", type=Path, default=ROOT / "evaluation_onfi_fast/results" /
                     datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     a = ap.parse_args()
@@ -101,7 +105,9 @@ def main():
             for case in a.cases]
     if a.plan_only:
         print(json.dumps({"suite": "device_mechanism", "mem_start": "8G", "mem_size": "16G",
-                          "cpus": a.cpus, "iodepth": a.iodepth, "plan": plan}, indent=2))
+                          "cpus": a.cpus, "host_cpu": a.host_cpu, "timer": a.timer,
+                          "random_max_units": a.random_max_units,
+                          "iodepth": a.iodepth, "plan": plan}, indent=2))
         return
     cmdline = Path("/proc/cmdline").read_text().strip()
     if "memmap=16G$8G" not in cmdline.split():
@@ -109,11 +115,13 @@ def main():
     cpu_ids = [int(c) for c in a.cpus.split(",")]
     if len(cpu_ids) < 2 or len(set(cpu_ids)) != len(cpu_ids):
         raise RuntimeError("need distinct dispatcher and completion CPUs")
-    for cpu in cpu_ids:
+    if a.host_cpu in cpu_ids:
+        raise RuntimeError("host CPU must be distinct from emulator CPUs")
+    for cpu in cpu_ids + [a.host_cpu]:
         online = Path(f"/sys/devices/system/cpu/cpu{cpu}/online")
         if not online.parent.exists() or (online.exists() and online.read_text().strip() != "1"):
             raise RuntimeError(f"CPU {cpu} is offline")
-    for tool in ("make", "cc", "fio", "insmod", "rmmod", "lsblk"):
+    for tool in ("make", "cc", "fio", "insmod", "rmmod", "lsblk", "taskset"):
         if not shutil.which(tool):
             raise RuntimeError(f"missing tool {tool}")
     if a.check_only:
@@ -130,7 +138,8 @@ def main():
     manifest = {"suite": "device_mechanism", "host_hint_path": "explicit_nvme_ioctl",
                 "kernel": capture(["uname", "-r"]), "git_head": capture(["git", "rev-parse", "HEAD"]),
                 "git_status": capture(["git", "status", "--porcelain"]), "cmdline": cmdline,
-                "cpus": a.cpus, "physical_bytes": 16 * 1024**3,
+                "cpus": a.cpus, "host_cpu": a.host_cpu, "timer": a.timer,
+                "random_max_units": a.random_max_units, "physical_bytes": 16 * 1024**3,
                 "onfi_topology": "one target per channel, two LUNs per target",
                 "channel_MiB_per_second": 800, "iodepth": a.iodepth, "plan": plan,
                 "status": "running"}
@@ -140,6 +149,12 @@ def main():
     helper = a.out / "nvme_hint"
     run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", ROOT / "evaluation_onfi_fast/nvme_hint.c",
          "-o", helper], a.out / "helper-build.log")
+    reader = a.out / "read_pass"
+    if a.timer == "aio":
+        if a.iodepth > 256:
+            raise RuntimeError("AIO pass supports QD up to 256")
+        run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", ROOT / "evaluation_onfi_fast/read_pass.c",
+             "-o", reader], a.out / "reader-build.log")
     module_loaded = False
     try:
         for item in plan:
@@ -165,17 +180,25 @@ def main():
                 raise RuntimeError("NVMeVirt namespace did not appear")
             if not a.module_smoke:
                 iolog = folder / "read.iolog"
-                run([helper, device, item["case"], str(item["seed"]), iolog],
+                run(["taskset", "-c", str(a.host_cpu), helper, device, item["case"],
+                     str(item["seed"]), iolog, str(a.random_max_units)],
                     folder / "construction.json", timeout=1800)
                 for read in range(1, a.reads + 1):
                     counters(folder / f"read{read}.before.stats")
                     output = folder / f"read{read}.json"
-                    run(["fio", "--name=fast24-read", "--ioengine=libaio", "--direct=1",
+                    if a.timer == "aio":
+                        run(["taskset", "-c", str(a.host_cpu), reader, iolog, str(a.iodepth)], output)
+                        measured = json.loads(output.read_text())
+                        if (measured["io_bytes"] != 8388608 or measured["completed"] != 256
+                                or not measured["verified"]):
+                            raise RuntimeError("incomplete AIO pass")
+                    else:
+                        run(["taskset", "-c", str(a.host_cpu), "fio", "--name=fast24-read", "--ioengine=libaio", "--direct=1",
                          "--thread=1", "--numjobs=1", "--iodepth=" + str(a.iodepth),
                          "--read_iolog=" + str(iolog), "--replay_no_stall=1", "--readonly",
                          "--lat_percentiles=1", "--percentile_list=50:95:99:99.9",
                          "--output-format=json", "--output=" + str(output)], folder / f"read{read}.log")
-                    check_fio(output)
+                        check_fio(output)
                     counters(folder / f"read{read}.after.stats")
             counters(folder / "final.stats")
             run(["rmmod", "nvmev"], folder / "rmmod.log")

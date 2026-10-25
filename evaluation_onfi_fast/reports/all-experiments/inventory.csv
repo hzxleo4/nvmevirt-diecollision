@@ -1,0 +1,9 @@
+run,status,validated_cases,error
+main-16g-aio-v1,passed,60,
+main-16g-v1,passed,60,
+module-smoke,failed,0,refusing model 'CSL_Virt_MN_01'
+onfi-positive-16g-v1,failed,1,ONFI positive control counter did not match switch
+onfi-positive-16g-v2,passed,12,
+onfi-positive-16g-v3,passed,12,
+smoke-v1,failed,0,unexpected replay length: /home/hzx/Github_Program/nvmevirt/evaluation_onfi_fast/results/smoke-v1/r1/A/append_worst/read1.json
+smoke-v2,passed,8,

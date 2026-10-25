@@ -19,6 +19,14 @@ static bool fast_placement;
 module_param(fast_placement, bool, 0444);
 MODULE_PARM_DESC(fast_placement, "FAST24 append/overwrite placement; reload to switch");
 
+/* Raw-device fio overwrites an already mapped LBA. This optional adapter
+ * supplies only that fact; it cannot infer file adjacency or append hints.
+ * Keep the original explicit-hint behavior as the default.
+ */
+static bool fast_infer_overwrite;
+module_param(fast_infer_overwrite, bool, 0444);
+MODULE_PARM_DESC(fast_infer_overwrite, "Infer raw-LBA overwrites for FAST24; default off, reload to switch");
+
 enum block_state { BLOCK_FREE, BLOCK_USER, BLOCK_GC, BLOCK_CLOSED };
 
 struct fast_cursor {
@@ -42,7 +50,8 @@ struct fast_ftl {
 	u32 next_die;
 	u64 writes, append_hints, overwrite_hints, applied_hints, missing_hints;
 	u64 rejected, read_pages;
-	bool placement;
+	u64 inferred_candidates, inferred_applied, inferred_changed;
+	bool placement, infer_overwrite;
 };
 
 static u32 die_id(struct fast_ftl *f, struct ppa p)
@@ -292,7 +301,10 @@ static bool fast_write(struct nvmev_ns *ns, struct nvmev_request *req,
 	for (lpn = first; lpn <= last; lpn++) {
 		struct ppa old = f->map[lpn], p;
 		int old_die = old.ppa == UNMAPPED_PPA ? -1 : (int)die_id(f, old);
-		u32 die = fast24_select_die(f->placement, control, f->next_die,
+		bool inferred = f->infer_overwrite && old_die >= 0 &&
+			!(control & (FAST24_APPEND | FAST24_OVERWRITE));
+		u32 placement_control = inferred ? control | FAST24_OVERWRITE : control;
+		u32 die = fast24_select_die(f->placement, placement_control, f->next_die,
 			old_die, previous_die, s->tt_luns, lpn == first);
 		struct fast_die *d = &f->dies[die];
 		if (!ensure_space(f, die, &end, req->sq_id)) {
@@ -301,6 +313,13 @@ static bool fast_write(struct nvmev_ns *ns, struct nvmev_request *req,
 			ret->nsecs_target = end;
 			f->rejected++;
 			return true;
+		}
+		if (inferred) {
+			f->inferred_candidates++;
+			if (f->placement) {
+				f->inferred_applied++;
+				f->inferred_changed += die != f->next_die;
+			}
 		}
 		if (f->placement && ((control & FAST24_OVERWRITE && old_die >= 0) ||
 		    (lpn == first && control & FAST24_APPEND && previous_die >= 0)))
@@ -410,6 +429,7 @@ void conv_init_namespace(struct nvmev_ns *ns, u32 id, u64 size, void *addr, u32 
 	ssd_init_params(&s, size, 1);
 	ssd_init(&f->ssd, &s, cpu);
 	f->placement = fast_placement;
+	f->infer_overwrite = fast_infer_overwrite;
 	f->map = vmalloc(array_size(s.tt_pgs, sizeof(*f->map)));
 	f->rmap = vmalloc(array_size(s.tt_pgs, sizeof(*f->rmap)));
 	f->dies = kcalloc(s.tt_luns, sizeof(*f->dies), GFP_KERNEL);
@@ -455,9 +475,10 @@ void fast24_debug(struct seq_file *m, struct nvmev_ns *ns)
 {
 	struct fast_ftl *f = ns->ftls;
 	u32 ch, die;
-	seq_printf(m, "fast24 onfi=%d placement=%d writes=%llu append_hints=%llu overwrite_hints=%llu applied=%llu missing=%llu rejected=%llu read_pages=%llu\n",
+	seq_printf(m, "fast24 onfi=%d placement=%d writes=%llu append_hints=%llu overwrite_hints=%llu applied=%llu missing=%llu rejected=%llu read_pages=%llu infer_overwrite=%d inferred_candidates=%llu inferred_applied=%llu inferred_changed=%llu\n",
 		f->ssd.onfi_collision, f->placement, f->writes, f->append_hints,
-		f->overwrite_hints, f->applied_hints, f->missing_hints, f->rejected, f->read_pages);
+		f->overwrite_hints, f->applied_hints, f->missing_hints, f->rejected, f->read_pages,
+		f->infer_overwrite, f->inferred_candidates, f->inferred_applied, f->inferred_changed);
 	for (ch = 0; ch < f->ssd.sp.nchs; ch++) {
 		struct ssd_channel *c = &f->ssd.ch[ch];
 		struct onfi_target t;

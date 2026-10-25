@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from runner import ROOT, capture, counters, namespaces, run, validate_log, verify_device
+from runner import ROOT, GROUPS, capture, counters, namespaces, run, validate_log, verify_device
 from summarize import stats, delta
 
 CASES = {f"4k-r{r}-qd32": (4, r, 32) for r in (100, 0, 70, 50, 30)}
@@ -91,6 +91,9 @@ def main():
     ap.add_argument("--plan-only", action="store_true")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--cases", nargs="+", choices=CASES, default=list(CASES))
+    ap.add_argument("--groups", nargs="+", choices=GROUPS, default=["A", "B"])
+    ap.add_argument("--infer-overwrite", action="store_true",
+                    help="opt-in NVMeVirt raw-LBA adapter for FAST overwrite affinity")
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--working-mib", type=int, default=2048)
     ap.add_argument("--io-mib", type=int, default=2048)
@@ -103,11 +106,15 @@ def main():
         a.repeats, a.working_mib, a.io_mib = 1, 16, 32
     if min(a.repeats, a.working_mib, a.io_mib) < 1 or a.working_mib + a.io_mib > 8192:
         ap.error("positive sizes required; this no-GC suite caps total fill+I/O at 8 GiB")
-    plan = [{"repeat": r, "case": c, "group": g, "onfi": int(g == "B"), "seed": 20261026+r,
+    if len(set(a.groups)) != len(a.groups):
+        ap.error("groups must be unique")
+    plan = [{"repeat": r, "case": c, "group": g, "onfi": GROUPS[g][0], "placement": GROUPS[g][1], "seed": 20261026+r,
              "bs_kib": CASES[c][0], "read_percent": CASES[c][1], "qd": CASES[c][2]}
-            for r in range(1, a.repeats+1) for c in a.cases for g in (("A", "B") if r % 2 else ("B", "A"))]
+            for r in range(1, a.repeats+1) for c in a.cases
+            for g in a.groups[(r-1)%len(a.groups):] + a.groups[:(r-1)%len(a.groups)]]
     if a.plan_only:
-        print(json.dumps({"working_mib": a.working_mib, "io_mib": a.io_mib, "plan": plan}, indent=2))
+        print(json.dumps({"working_mib": a.working_mib, "io_mib": a.io_mib,
+                          "infer_overwrite": a.infer_overwrite, "plan": plan}, indent=2))
         return
     if os.geteuid() or "memmap=16G$8G" not in Path("/proc/cmdline").read_text().split():
         raise RuntimeError("root and 16 GiB boot reservation required")
@@ -120,11 +127,13 @@ def main():
     if not a.out.is_relative_to(ROOT / "evaluation_onfi_fast/results"):
         raise RuntimeError("output must be inside evaluation_onfi_fast/results")
     a.out.mkdir(parents=True, exist_ok=False)
-    manifest = {"suite": "fio_random_onfi", "status": "running", "smoke": a.smoke,
+    manifest = {"suite": "fio_random_fast" if a.infer_overwrite or any(i["placement"] for i in plan) else "fio_random_onfi",
+                "status": "running", "smoke": a.smoke,
                 "git_head": capture(["git", "rev-parse", "HEAD"]), "git_status": capture(["git", "status", "--porcelain"]),
                 "kernel": capture(["uname", "-r"]), "fio": capture(["/usr/bin/fio", "--version"]),
                 "physical_bytes": 16*1024**3, "working_bytes": a.working_mib*1024**2,
-                "io_bytes": a.io_mib*1024**2, "fast_placement": False,
+                "io_bytes": a.io_mib*1024**2, "fast_placement": any(i["placement"] for i in plan),
+                "groups": a.groups, "infer_overwrite": a.infer_overwrite,
                 "cpus": a.cpus, "host_cpu": a.host_cpu, "plan": plan,
                 "notes": ["ordinary uniform random fio requests, no die selection or hints",
                           "fixed I/O volume; no time_based or steady-state claim",
@@ -134,6 +143,7 @@ def main():
                           "measured fio counters and final explicit FLUSH counters are separate"]}
     sources = ("evaluation_onfi_fast/run_fio.py", "fast24_ftl.c", "ssd.c", "ssd_config.h", "onfi_model.h", "admin.c", "Kbuild")
     manifest["source_sha256"] = {p: hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in sources}
+    manifest["notes"].append("Raw overwrite inference applies only to mapped LBAs; it does not infer file append/adjacency")
     save(a.out / "manifest.json", manifest)
     try:
         run(["make", "NVMEV_PROFILE=fast24", "-j4"], a.out / "build.log")
@@ -146,7 +156,8 @@ def main():
             try:
                 before = namespaces()
                 run(["insmod", ROOT / "nvmev.ko", "memmap_start=8G", "memmap_size=16G", "cpus="+a.cpus,
-                     f"onfi_collision={item['onfi']}", "fast_placement=0"], folder / "insmod.log")
+                     f"onfi_collision={item['onfi']}", f"fast_placement={item['placement']}",
+                     f"fast_infer_overwrite={int(a.infer_overwrite)}"], folder / "insmod.log")
                 loaded = True
                 for _ in range(100):
                     found = namespaces()-before
@@ -188,9 +199,16 @@ def main():
                 counters(folder / "final.stats")
                 fields = dict(x.split("=") for x in next(l for l in (folder / "final.stats").read_text().splitlines()
                                                         if l.startswith("fast24 ")).split()[1:])
-                if int(fields["onfi"]) != item["onfi"] or any(int(fields[k]) for k in
-                        ("placement", "rejected", "append_hints", "overwrite_hints")):
+                if (int(fields["onfi"]) != item["onfi"] or int(fields["placement"]) != item["placement"] or
+                        int(fields["infer_overwrite"]) != a.infer_overwrite or any(int(fields[k]) for k in
+                        ("rejected", "append_hints", "overwrite_hints", "applied"))):
                     raise RuntimeError("feature switch or I/O validation failure")
+                expected = job["write"]["io_bytes"] // 4096 if a.infer_overwrite else 0
+                if (int(fields["inferred_candidates"]) != expected or
+                        int(fields["inferred_applied"]) != (expected if item["placement"] else 0)):
+                    raise RuntimeError("raw overwrite inference did not match measured writes")
+                if item["placement"] and expected and not int(fields["inferred_changed"]):
+                    raise RuntimeError("FAST inference never changed the allocator die choice")
                 if stats(folder / "final.stats")["gc"]:
                     raise RuntimeError("GC occurred; not a valid no-GC experiment")
             finally:

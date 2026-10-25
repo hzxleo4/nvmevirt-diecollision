@@ -44,15 +44,52 @@ static void invariant(struct nvmev_ns *ns)
 	assert(valid==counted);
 }
 
+static void raw_overwrite_boundary(void)
+{
+	unsigned infer, mode;
+	for (infer=0; infer<2; infer++) for (mode=0; mode<2; mode++) {
+		struct nvmev_ns ns={0};
+		struct fast_ftl *f;
+		u32 old_die, next, prev_die;
+		fast_placement=mode;
+		fast_infer_overwrite=infer;
+		conv_init_namespace(&ns,0,4*1024*1024,NULL,0);
+		f=ns.ftls;
+		io(&ns,nvme_cmd_write,0,24,0,0);
+		assert(!f->inferred_candidates && !f->inferred_applied);
+		old_die=die_id(f,f->map[0]); next=f->next_die;
+		assert(old_die!=next);
+		io(&ns,nvme_cmd_write,0,1,0,0);
+		assert(die_id(f,f->map[0])==(mode && infer ? old_die : next));
+		assert(f->inferred_candidates==infer && f->inferred_applied==(mode && infer));
+		assert(f->inferred_changed==(mode && infer));
+		assert(!f->overwrite_hints && !f->applied_hints);
+		/* Explicit append has precedence even when replacing an existing LBA. */
+		prev_die=die_id(f,f->map[15]); next=f->next_die;
+		io(&ns,nvme_cmd_write,0,1,FAST24_APPEND,15);
+		assert(die_id(f,f->map[0])==(mode ? (prev_die+1)%f->ssd.sp.tt_luns : next));
+		assert(f->inferred_candidates==infer);
+		/* An unmapped LBA is never inferred as an overwrite. */
+		next=f->next_die;
+		io(&ns,nvme_cmd_write,128,1,0,0);
+		assert(die_id(f,f->map[128])==next);
+		assert(f->inferred_candidates==infer);
+		invariant(&ns);
+		conv_remove_namespace(&ns);
+	}
+}
+
 int main(void)
 {
-	unsigned mode;
-	for(mode=0;mode<2;mode++) {
+	unsigned mode, infer;
+	raw_overwrite_boundary();
+	for(infer=0;infer<2;infer++) for(mode=0;mode<2;mode++) {
 		struct nvmev_ns ns={0};
 		struct fast_ftl *f;
 		u32 i, d, saved[64];
 		u64 gc_count=0;
 		fast_placement=mode;
+		fast_infer_overwrite=infer;
 		conv_init_namespace(&ns,0,4*1024*1024,NULL,0);
 		f=ns.ftls;
 		io(&ns,nvme_cmd_write,0,64,0,0);
@@ -61,7 +98,7 @@ int main(void)
 		 * flash pages, overwrites, flush padding and intervening reads. */
 		for(i=0;i<6000;i++) {
 			u32 page=(i*37)%64;
-			io(&ns,nvme_cmd_write,page,1,FAST24_OVERWRITE,0);
+			io(&ns,nvme_cmd_write,page,1,infer ? 0 : FAST24_OVERWRITE,0);
 			if(mode) assert(die_id(f,f->map[page])==saved[page]);
 			if(i%7==0) io(&ns,nvme_cmd_read,page,1,0,0);
 			if(i%13==0) io(&ns,nvme_cmd_flush,0,1,0,0);
@@ -71,8 +108,11 @@ int main(void)
 		assert(f->ssd.write_buffer->remaining==f->ssd.write_buffer->size);
 		for(d=0;d<f->ssd.sp.tt_luns;d++) gc_count+=f->dies[d].gc_count;
 		assert(gc_count>0);
+		assert(f->inferred_candidates==(infer ? 6000 : 0));
+		assert(f->inferred_applied==(infer && mode ? 6000 : 0));
+		assert(f->overwrite_hints==(infer ? 0 : 6000));
 		invariant(&ns);
 		conv_remove_namespace(&ns);
 	}
-	puts("Actual FTL: mapping/rmap, partial programs, buffer accounting, GC and overwrite affinity: PASS");
+	puts("Actual FTL: explicit/inferred overwrite affinity, opt-in/precedence, mapping/rmap, buffering and GC: PASS");
 }

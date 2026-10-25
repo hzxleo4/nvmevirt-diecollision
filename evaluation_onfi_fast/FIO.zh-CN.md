@@ -4,6 +4,8 @@
 沿用相邻 `nvmevirt-clssd/benchmarks/nvmev_fio_matrix.sh` 的 libaio、direct I/O、
 单 job 和固定 I/O 量测试思路；这里使用同一个 FAST24 FTL，仅切换 ONFI。
 不选择 die，不构造指定 die 间的交替访问，也不发送 FAST 文件提示。
+默认 `--groups A B` 保留这个实验；[FAST 覆盖适配的四组实验](FAST_FIO.zh-CN.md)
+使用 `--groups A B C D --infer-overwrite`，单列报告，不能与默认实验混淆。
 
 | 请求大小 | QD | 读比例 |
 |---|---:|---|

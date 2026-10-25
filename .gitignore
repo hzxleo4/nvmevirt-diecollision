@@ -171,3 +171,7 @@ sphinx_*/
 
 # Local makefile
 Makefile.local
+# FAST24 local builds and raw experimental output (summaries are versioned).
+evaluation_onfi_fast/results/
+evaluation_onfi_fast/.cache/
+__pycache__/

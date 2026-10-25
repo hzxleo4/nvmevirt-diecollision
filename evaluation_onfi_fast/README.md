@@ -61,5 +61,47 @@ All device writes must target a newly created and verified NVMeVirt namespace.
 
 ## Status
 
-Implementation and validation are in progress. No performance numbers have
-been obtained in this repository yet.
+The device mechanism implementation and four-group worst-case smoke test pass.
+Full filesystem/application reproduction still requires the host hint path.
+
+## Build and device mechanism experiments
+
+```bash
+./tests/run.sh
+./evaluation_onfi_fast/00_check_environment.sh
+PLAN_ONLY=1 ./evaluation_onfi_fast/run_all.sh
+sudo ./evaluation_onfi_fast/run_all.sh --module-smoke --out evaluation_onfi_fast/results/module-smoke
+sudo ./evaluation_onfi_fast/run_all.sh --repeats 3 --reads 10 --out evaluation_onfi_fast/results/main-16g
+python3 evaluation_onfi_fast/summarize.py evaluation_onfi_fast/results/main-16g --output evaluation_onfi_fast/reports/main-16g
+```
+
+The profile is selected using `make NVMEV_PROFILE=fast24`; ordinary builds
+retain the original default device selection. Both feature switches are module
+parameters: `onfi_collision=0|1 fast_placement=0|1`. They do not require a
+rebuild. Reloading creates a clean experiment boundary and avoids applying a
+new hardware rule to already scheduled commands. Live switching is not exposed.
+
+The implementation uses one allocator and a 4 MiB write buffer for all groups.
+Programs release buffer space at completion, and flush/read of a partial page
+programs it with padding. Per-die GC preserves die affinity in every group.
+These correctness choices differ from the reference artifact's asymmetric
+buffer release and its incomplete per-die GC bookkeeping, so the code is a
+method reproduction rather than a byte-for-byte copy of that artifact.
+
+`nvme_hint.c` builds 256 × 32 KiB target pieces. Worst-case interference is
+224 KiB; random interference is a seeded 32 KiB–32 MiB multiple of 32 KiB.
+Append layouts use scattered LBAs; overwrite layouts retain contiguous LBAs.
+The same hints are sent to every group and ignored when placement is off.
+All target data is verified before measurement. Measurement uses fio 3.28,
+libaio, direct I/O and QD32, with complete 8 MiB passes. This is explicitly a
+device-mechanism analogue of the paper's hypothetical workloads; host syscall,
+filesystem splitting and page-cache effects are absent. fio reports burst
+runtime in milliseconds, so small throughput differences must not be interpreted
+as precise causal effects without supporting counters and repetitions.
+
+The iolog intentionally has no explicit `close`: fio 3.28 otherwise omits the
+last QD-1 asynchronous completions. The runner requires exactly 8 MiB and 256
+latency samples per pass. All raw runs stay under the ignored `results/`
+directory; validated summaries and source manifests can be committed in
+`reports/`. Repeated reads of one layout are distinguished from independent
+reconstruction/seed trials.

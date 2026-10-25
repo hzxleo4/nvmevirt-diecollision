@@ -635,7 +635,7 @@ static int nvmev_io_worker(void *data)
 #ifdef PERF_DEBUG
 				w->nsecs_copy_start = local_clock() + delta;
 #endif
-				if (w->is_internal) {
+				if (w->is_internal || w->status != NVME_SC_SUCCESS) {
 					;
 				} else if (io_using_dma) {
 					__do_perform_io_using_dma(w->sqid, w->sq_entry);

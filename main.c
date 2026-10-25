@@ -73,6 +73,10 @@ static unsigned int io_unit_shift = 12;
 static char *cpus;
 static unsigned int debug = 0;
 
+#ifdef CONFIG_NVMEVIRT_FAST24
+#include "fast24_ftl.h"
+#endif
+
 int io_using_dma = false;
 
 static int set_parse_mem_param(const char *val, const struct kernel_param *kp)
@@ -351,7 +355,9 @@ static int __proc_file_read(struct seq_file *m, void *data)
 		seq_printf(m, "total: %u %u %u %llu\n", nr_in_flight, nr_dispatch, nr_dispatched,
 			   total_io);
 	} else if (strcmp(filename, "debug") == 0) {
-		/* Left for later use */
+#ifdef CONFIG_NVMEVIRT_FAST24
+		fast24_debug(m, &nvmev_vdev->ns[0]);
+#endif
 	}
 
 	return 0;

@@ -7,6 +7,7 @@
 #include "pqueue/pqueue.h"
 #include "ssd_config.h"
 #include "channel_model.h"
+#include "onfi_model.h"
 /*
     Default malloc size (when sector size is 512B)
     Channel = 40 * 8 = 320
@@ -116,6 +117,8 @@ struct ssd_channel {
 	int nluns;
 	uint64_t gc_endtime;
 	struct channel_model *perf_model;
+	struct onfi_target onfi;
+	spinlock_t timing_lock;
 };
 
 struct ssd_pcie {
@@ -216,6 +219,7 @@ struct ssd {
 	struct ssd_pcie *pcie;
 	struct buffer *write_buffer;
 	unsigned int cpu_nr_dispatcher;
+	bool onfi_collision;
 };
 
 static inline struct ssd_channel *get_ch(struct ssd *ssd, struct ppa *ppa)

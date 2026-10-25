@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <linux/ktime.h>
+#include <linux/module.h>
 #include <linux/sched/clock.h>
 
 #include "nvmev.h"
 #include "ssd.h"
+
+static bool onfi_collision;
+module_param(onfi_collision, bool, 0444);
+MODULE_PARM_DESC(onfi_collision,
+	"ONFI page-register restriction; one target per channel; reload to switch");
 
 static inline uint64_t __get_ioclock(struct ssd *ssd)
 {
@@ -240,6 +246,7 @@ static void ssd_init_nand_lun(struct nand_lun *lun, struct ssdparams *spp)
 		ssd_init_nand_plane(&lun->pl[i], spp);
 	}
 	lun->next_lun_avail_time = 0;
+	lun->gc_endtime = 0;
 	lun->busy = false;
 }
 
@@ -256,6 +263,8 @@ static void ssd_remove_nand_lun(struct nand_lun *lun)
 static void ssd_init_ch(struct ssd_channel *ch, struct ssdparams *spp)
 {
 	int i;
+	ch->onfi = (struct onfi_target){};
+	spin_lock_init(&ch->timing_lock);
 	ch->nluns = spp->luns_per_ch;
 	ch->lun = kmalloc(sizeof(struct nand_lun) * ch->nluns, GFP_KERNEL);
 	for (i = 0; i < ch->nluns; i++) {
@@ -297,6 +306,7 @@ void ssd_init(struct ssd *ssd, struct ssdparams *spp, uint32_t cpu_nr_dispatcher
 	uint32_t i;
 	/* copy spp */
 	ssd->sp = *spp;
+	ssd->onfi_collision = onfi_collision;
 
 	/* initialize conv_ftl internal layout architecture */
 	ssd->ch = kmalloc(sizeof(struct ssd_channel) * spp->nchs, GFP_KERNEL); // 40 * 8 = 320
@@ -371,6 +381,7 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 	struct ssd_channel *ch;
 	struct ppa *ppa = ncmd->ppa;
 	uint32_t cell;
+	unsigned long flags;
 	NVMEV_DEBUG(
 		"SSD: %p, Enter stime: %lld, ch %d lun %d blk %d page %d command %d ppa 0x%llx\n",
 		ssd, ncmd->stime, ppa->g.ch, ppa->g.lun, ppa->g.blk, ppa->g.pg, c, ppa->ppa);
@@ -385,11 +396,14 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 	ch = get_ch(ssd, ppa);
 	cell = get_cell(ssd, ppa);
 	remaining = ncmd->xfer_size;
+	completed_time = chnl_etime = cmd_stime;
+	spin_lock_irqsave(&ch->timing_lock, flags);
 
 	switch (c) {
 	case NAND_READ:
 		/* read: perform NAND cmd first */
 		nand_stime = max(lun->next_lun_avail_time, cmd_stime);
+		nand_stime = onfi_read_start(&ch->onfi, nand_stime);
 
 		if (ncmd->xfer_size == 4096) {
 			nand_etime = nand_stime + spp->pg_4kb_rd_lat[cell];
@@ -415,13 +429,18 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 		}
 
 		lun->next_lun_avail_time = chnl_etime;
+		onfi_read_done(&ch->onfi, chnl_etime);
 		break;
 
 	case NAND_WRITE:
 		/* write: transfer data through channel first */
 		chnl_stime = max(lun->next_lun_avail_time, cmd_stime);
+		chnl_stime = max(chnl_stime, ch->onfi.program_input_until);
+		chnl_stime = onfi_program_start(&ch->onfi, chnl_stime,
+						ssd->onfi_collision);
 
 		chnl_etime = chmodel_request(ch->perf_model, chnl_stime, ncmd->xfer_size);
+		onfi_program_input_done(&ch->onfi, chnl_etime);
 
 		/* write: then do NAND program */
 		nand_stime = chnl_etime;
@@ -447,9 +466,10 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 
 	default:
 		NVMEV_ERROR("Unsupported NAND command: 0x%x\n", c);
-		return 0;
+		completed_time = cmd_stime;
 	}
 
+	spin_unlock_irqrestore(&ch->timing_lock, flags);
 	return completed_time;
 }
 

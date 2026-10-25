@@ -430,7 +430,11 @@ static void __nvmev_admin_identify_ctrl(int eid)
 	ctrl->acl = 3; //minimum 4 required, 0's based value
 	ctrl->vwc = 0;
 	snprintf(ctrl->sn, sizeof(ctrl->sn), "CSL_Virt_SN_%02d", 1);
+#ifdef CONFIG_NVMEVIRT_FAST24
+	snprintf(ctrl->mn, sizeof(ctrl->mn), "NVMeVirt_FAST24");
+#else
 	snprintf(ctrl->mn, sizeof(ctrl->mn), "CSL_Virt_MN_%02d", 1);
+#endif
 	snprintf(ctrl->fr, sizeof(ctrl->fr), "CSL_%03d", 2);
 	ctrl->mdts = nvmev_vdev->mdts;
 	ctrl->sqes = 0x66;

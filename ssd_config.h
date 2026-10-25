@@ -70,8 +70,13 @@ enum {
 #define MDTS (6)
 #define CELL_MODE (CELL_MODE_MLC)
 
+#ifdef CONFIG_NVMEVIRT_FAST24
+#define SSD_PARTITIONS (1)
+#define NAND_CHANNELS (4)
+#else
 #define SSD_PARTITIONS (4)
 #define NAND_CHANNELS (8)
+#endif
 #define LUNS_PER_NAND_CH (2)
 #define PLNS_PER_LUN (1)
 #define FLASH_PAGE_SIZE KB(32)
@@ -102,7 +107,12 @@ static_assert((ONESHOT_PAGE_SIZE % FLASH_PAGE_SIZE) == 0);
 #define FW_CH_XFER_LATENCY (0)
 #define OP_AREA_PERCENT (0.07)
 
+#ifdef CONFIG_NVMEVIRT_FAST24
+/* Same buffer capacity in all four placement/collision combinations. */
+#define GLOBAL_WB_SIZE MB(4)
+#else
 #define GLOBAL_WB_SIZE (NAND_CHANNELS * LUNS_PER_NAND_CH * ONESHOT_PAGE_SIZE * 2)
+#endif
 #define WRITE_EARLY_COMPLETION 1
 
 #define LBA_BITS (9)

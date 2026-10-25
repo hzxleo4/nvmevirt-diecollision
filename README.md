@@ -1,5 +1,11 @@
 # NVMeVirt
 
+This fork adds switchable ONFI page-register restrictions and FAST '24 die
+placement. See the [16 GiB experiment guide](evaluation_onfi_fast/README.md)
+for the four-group test matrix, scripts, measured results and reproduction scope.
+Build it with `make NVMEV_PROFILE=fast24`. Both switches are NVMeVirt module
+parameters; the device experiments run on the existing host kernel.
+
 ## Introduction
 
 NVMeVirt is a versatile software-defined virtual NVMe device. It is implemented as a Linux kernel module providing the system with a virtual NVMe device of various kinds. Currently, NVMeVirt supports conventional SSDs, NVM SSDs, ZNS SSDs, etc. The device is emulated at the PCI layer, presenting a native NVMe device to the entire system. Thus, NVMeVirt has the capability not only to function as a standard storage device, but also to be utilized in advanced storage configurations, such as NVMe-oF target offloading, kernel bypassing, and PCI peer-to-peer communication.

@@ -7,6 +7,7 @@ own NVMeVirt device and refuses an already loaded module or mounted namespace.
 import argparse
 import datetime
 import glob
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -82,6 +83,8 @@ def main():
     ap.add_argument("--plan-only", action="store_true")
     ap.add_argument("--check-only", action="store_true")
     ap.add_argument("--module-smoke", action="store_true")
+    ap.add_argument("--collision-probe", action="store_true",
+                    help="separate ONFI positive control; not a paper workload")
     ap.add_argument("--groups", nargs="+", choices=GROUPS, default=list(GROUPS))
     ap.add_argument("--cases", nargs="+", choices=CASES, default=list(CASES))
     ap.add_argument("--repeats", type=int, default=1)
@@ -98,13 +101,19 @@ def main():
     a = ap.parse_args()
     if min(a.repeats, a.reads, a.iodepth, a.seed) < 1:
         ap.error("repeat/read/queue/seed values must be positive")
+    if a.collision_probe:
+        if a.module_smoke:
+            ap.error("choose module smoke or collision probe")
+        a.cases = ["contiguous"]
+    suite = "onfi_positive_control" if a.collision_probe else "device_mechanism"
     plan = [{"group": g, "onfi": GROUPS[g][0], "placement": GROUPS[g][1],
-             "case": case, "repeat": rep, "seed": a.seed + rep, "reads": a.reads}
+             "case": case, "repeat": rep, "seed": a.seed + rep,
+             "reads": 0 if a.collision_probe else a.reads}
             for rep in range(1, a.repeats + 1)
             for g in a.groups[(rep - 1) % len(a.groups):] + a.groups[:(rep - 1) % len(a.groups)]
             for case in a.cases]
     if a.plan_only:
-        print(json.dumps({"suite": "device_mechanism", "mem_start": "8G", "mem_size": "16G",
+        print(json.dumps({"suite": suite, "mem_start": "8G", "mem_size": "16G",
                           "cpus": a.cpus, "host_cpu": a.host_cpu, "timer": a.timer,
                           "random_max_units": a.random_max_units,
                           "iodepth": a.iodepth, "plan": plan}, indent=2))
@@ -135,7 +144,7 @@ def main():
         raise RuntimeError("nvmev is already loaded; refusing to take over another run")
     a.out = a.out.resolve()
     a.out.mkdir(parents=True, exist_ok=False)
-    manifest = {"suite": "device_mechanism", "host_hint_path": "explicit_nvme_ioctl",
+    manifest = {"suite": suite, "host_hint_path": "explicit_nvme_ioctl",
                 "kernel": capture(["uname", "-r"]), "git_head": capture(["git", "rev-parse", "HEAD"]),
                 "git_status": capture(["git", "status", "--porcelain"]), "cmdline": cmdline,
                 "cpus": a.cpus, "host_cpu": a.host_cpu, "timer": a.timer,
@@ -143,6 +152,16 @@ def main():
                 "onfi_topology": "one target per channel, two LUNs per target",
                 "channel_MiB_per_second": 800, "iodepth": a.iodepth, "plan": plan,
                 "status": "running"}
+    source_files = ("ssd.c", "ssd.h", "ssd_config.h", "channel_model.c", "onfi_model.h",
+                    "fast24_ftl.c", "fast24_placement.h", "Kbuild", "io.c", "admin.c",
+                    "evaluation_onfi_fast/runner.py", "evaluation_onfi_fast/nvme_hint.c",
+                    "evaluation_onfi_fast/read_pass.c", "evaluation_onfi_fast/collision_probe.c")
+    manifest["source_sha256"] = {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest()
+                                 for p in source_files}
+    if a.collision_probe:
+        manifest["diagnostic"] = {"iodepth": 64, "commands": 16384, "read_percent": 50,
+                                  "request_bytes": 32768, "write_hints": "none",
+                                  "not_a_paper_workload": True}
     (a.out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     shutil.copy(ROOT / "ssd_config.h", a.out / "ssd_config.h")
     run(["make", "NVMEV_PROFILE=fast24", "-j4"], a.out / "build.log")
@@ -150,7 +169,11 @@ def main():
     run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", ROOT / "evaluation_onfi_fast/nvme_hint.c",
          "-o", helper], a.out / "helper-build.log")
     reader = a.out / "read_pass"
-    if a.timer == "aio":
+    if a.collision_probe:
+        probe = a.out / "collision_probe"
+        run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", ROOT / "evaluation_onfi_fast/collision_probe.c",
+             "-o", probe], a.out / "probe-build.log")
+    elif a.timer == "aio":
         if a.iodepth > 256:
             raise RuntimeError("AIO pass supports QD up to 256")
         run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", ROOT / "evaluation_onfi_fast/read_pass.c",
@@ -183,7 +206,20 @@ def main():
                 run(["taskset", "-c", str(a.host_cpu), helper, device, item["case"],
                      str(item["seed"]), iolog, str(a.random_max_units)],
                     folder / "construction.json", timeout=1800)
-                for read in range(1, a.reads + 1):
+                if a.collision_probe:
+                    from summarize import stats, delta
+                    counters(folder / "probe.before.stats")
+                    run(["taskset", "-c", str(a.host_cpu), probe, iolog], folder / "probe.json")
+                    counters(folder / "probe.after.stats")
+                    measured = json.loads((folder / "probe.json").read_text())
+                    if measured["completed"] != 16384 or not measured["verified"]:
+                        raise RuntimeError("incomplete collision probe")
+                    diff = delta(stats(folder / "probe.after.stats"), stats(folder / "probe.before.stats"))
+                    if not diff["reads"] or not diff["programs"]:
+                        raise RuntimeError("probe did not exercise NAND reads and programs")
+                    if bool(diff["onfi_events"]) != bool(item["onfi"]):
+                        raise RuntimeError("ONFI positive control counter did not match switch")
+                for read in range(1, item["reads"] + 1):
                     counters(folder / f"read{read}.before.stats")
                     output = folder / f"read{read}.json"
                     if a.timer == "aio":

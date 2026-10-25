@@ -61,8 +61,20 @@ All device writes must target a newly created and verified NVMeVirt namespace.
 
 ## Status
 
-The device mechanism implementation and four-group worst-case smoke test pass.
-Full filesystem/application reproduction still requires the host hint path.
+The implementation, four-group smoke test and 16 GiB mechanism matrix pass.
+Per the user's scope preference, active changes stay in NVMeVirt and the test
+programs; host-kernel adaptation is deferred. The stock host kernel is unchanged.
+The tested result is a device-method reproduction with explicit hints, not a
+claim that unmodified SQLite/Filebench supplies the paper's filesystem hints.
+
+The primary measured report is [main-16g-aio-v1](reports/main-16g-aio-v1/SUMMARY.md):
+three independent constructions per group/layout, ten complete reads each,
+600 measured passes. With ONFI enabled, FAST improves worst-case append and
+overwrite throughput by 6.54x and 6.38x respectively. Both construction and
+pure-read phases have zero ONFI program waits in these workloads. Consequently,
+the observed A/B variation is **not** a measured ONFI penalty. The earlier
+[fio report](reports/main-16g-v1/SUMMARY.md) uses millisecond timing and is retained
+as a preliminary result, separately from the higher-resolution AIO report.
 
 ## Build and device mechanism experiments
 
@@ -71,7 +83,7 @@ Full filesystem/application reproduction still requires the host hint path.
 ./evaluation_onfi_fast/00_check_environment.sh
 PLAN_ONLY=1 ./evaluation_onfi_fast/run_all.sh
 sudo ./evaluation_onfi_fast/run_all.sh --module-smoke --out evaluation_onfi_fast/results/module-smoke
-sudo ./evaluation_onfi_fast/run_all.sh --repeats 3 --reads 10 --out evaluation_onfi_fast/results/main-16g
+sudo ./evaluation_onfi_fast/run_all.sh --timer aio --host-cpu 3 --repeats 3 --reads 10 --out evaluation_onfi_fast/results/main-16g
 python3 evaluation_onfi_fast/summarize.py evaluation_onfi_fast/results/main-16g --output evaluation_onfi_fast/reports/main-16g
 ```
 
@@ -90,10 +102,16 @@ method reproduction rather than a byte-for-byte copy of that artifact.
 
 `nvme_hint.c` builds 256 × 32 KiB target pieces. Worst-case interference is
 224 KiB; random interference is a seeded 32 KiB–32 MiB multiple of 32 KiB.
-Append layouts use scattered LBAs; overwrite layouts retain contiguous LBAs.
+The paper's random range is 32 KiB–32 MiB (`--random-max-units 1024`, default),
+whereas the published artifact uses 32 KiB–1 MiB (`--random-max-units 32`).
+The manifest records this choice. Append layouts use scattered LBAs;
+overwrite layouts retain contiguous LBAs.
 The same hints are sent to every group and ignored when placement is off.
-All target data is verified before measurement. Measurement uses fio 3.28,
-libaio, direct I/O and QD32, with complete 8 MiB passes. This is explicitly a
+All target data is verified before measurement. Both timing paths use Linux
+AIO, direct I/O and QD32, with complete 8 MiB passes. `--timer aio` measures the
+complete pass with CLOCK_MONOTONIC nanoseconds and verifies every returned byte;
+its latency is userspace submission-to-reap, including host processing.
+`--timer fio` uses fio 3.28. This is explicitly a
 device-mechanism analogue of the paper's hypothetical workloads; host syscall,
 filesystem splitting and page-cache effects are absent. fio reports burst
 runtime in milliseconds, so small throughput differences must not be interpreted
@@ -105,3 +123,33 @@ latency samples per pass. All raw runs stay under the ignored `results/`
 directory; validated summaries and source manifests can be committed in
 `reports/`. Repeated reads of one layout are distinguished from independent
 reconstruction/seed trials.
+
+## ONFI positive control (separate diagnostic)
+
+```bash
+sudo ./evaluation_onfi_fast/run_all.sh --collision-probe --repeats 3 --out evaluation_onfi_fast/results/onfi-positive-16g
+python3 evaluation_onfi_fast/summarize_probe.py evaluation_onfi_fast/results/onfi-positive-16g --output evaluation_onfi_fast/reports/onfi-positive-16g
+```
+
+This is **not** a FAST24 workload. It checks that real NVMe I/O reaches the ONFI
+timing path: 16,384 alternating 32 KiB reads/writes, QD64, disjoint 8 MiB read
+and write regions. Reads lead writes by four flash pages to exercise the other
+LUN on the same channel. Write hints are absent; FAST is not expected to improve
+this diagnostic. The runner requires positive ONFI waits for B/C and zero for
+A/D, verifies every read and final written data, drains writes, and unloads the
+module. Reported throughput includes final drain. Summed modeled wait times
+can overlap across channels and cannot be added to wall-clock runtime.
+
+## Paper workload coverage
+
+| Paper evaluation | Current coverage | Scope difference |
+|---|---|---|
+| Hypothetical append/overwrite | Four groups, contiguous/worst/random layouts, completed | Explicit hints and raw device reads instead of ext4 and 1 MiB application read syscalls |
+| SQLite: 10,000 records, approximately 16 KiB, 100 KiB interference | Protocol reviewed; application run pending | Stock host does not produce file hints |
+| Filebench fileserver: 10,000 initial 128 KiB files, 10 threads, 32/16 KiB appends | Protocol reviewed; application run pending | Stock host does not produce file hints; published script appends for 30 s while paper describes 60 s |
+
+The device sees LBAs, not filenames. Without file hints, treating adjacent LBAs
+as adjacent file blocks would change the method being tested. Full application
+numbers must therefore remain pending until a validated hint transport or an
+explicitly labeled application-trace replay is available. No host-kernel
+installation/reboot is part of the current test workflow.

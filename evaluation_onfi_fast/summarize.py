@@ -37,6 +37,8 @@ def main():
     ap.add_argument("--output", type=Path, required=True)
     a = ap.parse_args()
     manifest = json.loads((a.result / "manifest.json").read_text())
+    if manifest["suite"] != "device_mechanism":
+        raise SystemExit("use summarize_probe.py for ONFI diagnostics")
     timer = manifest.get("timer", "fio")
     if manifest["status"] != "passed":
         raise SystemExit("Refusing incomplete/failed experiment")

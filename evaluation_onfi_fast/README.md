@@ -1,5 +1,7 @@
 # FAST '24 × ONFI, 16 GiB
 
+[中文实现与测试结论](RESULTS.zh-CN.md)
+
 This experiment isolates the ONFI multi-LUN page-register restriction described
 in CLSSD from the page-to-die placement policy in Jun et al., FAST '24.
 The workload definitions follow FAST '24; CLSSD's fio/BigTrace evaluation is
@@ -139,6 +141,9 @@ this diagnostic. The runner requires positive ONFI waits for B/C and zero for
 A/D, verifies every read and final written data, drains writes, and unloads the
 module. Reported throughput includes final drain. Summed modeled wait times
 can overlap across channels and cannot be added to wall-clock runtime.
+The [validated diagnostic report](reports/onfi-positive-16g-v3/SUMMARY.md) shows
+positive waits only with ONFI enabled and a 43.80% B/A throughput reduction for
+this specific overlap pattern. It must not be presented as the paper's ONFI cost.
 
 ## Paper workload coverage
 

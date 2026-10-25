@@ -1,0 +1,151 @@
+{
+  "suite": "onfi_positive_control",
+  "host_hint_path": "explicit_nvme_ioctl",
+  "kernel": "6.8.0-138-generic",
+  "git_head": "cc4b58e128cbcb21ac45105e90e4b8f9c0cce133",
+  "git_status": "",
+  "cmdline": "BOOT_IMAGE=/boot/vmlinuz-6.8.0-138-generic root=UUID=445cbd7b-787a-48b9-bf93-5746218abc46 ro memmap=16G$8G quiet splash vt.handoff=7",
+  "cpus": "7,8,9,10",
+  "host_cpu": 3,
+  "timer": "fio",
+  "random_max_units": 1024,
+  "physical_bytes": 17179869184,
+  "onfi_topology": "one target per channel, two LUNs per target",
+  "channel_MiB_per_second": 800,
+  "iodepth": 32,
+  "plan": [
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 0
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 0
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 0
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 1,
+      "seed": 20261026,
+      "reads": 0
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 0
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 0
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 0
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 2,
+      "seed": 20261027,
+      "reads": 0
+    },
+    {
+      "group": "C",
+      "onfi": 1,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 0
+    },
+    {
+      "group": "D",
+      "onfi": 0,
+      "placement": 1,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 0
+    },
+    {
+      "group": "A",
+      "onfi": 0,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 0
+    },
+    {
+      "group": "B",
+      "onfi": 1,
+      "placement": 0,
+      "case": "contiguous",
+      "repeat": 3,
+      "seed": 20261028,
+      "reads": 0
+    }
+  ],
+  "status": "passed",
+  "source_sha256": {
+    "ssd.c": "78e7a40f2129de4119e403147f04ac90f3d13671dd15598639ac6537088a8a51",
+    "ssd.h": "d6cdba11db8b49417b523db7dd8cbd4ca93bf8be64454d557d828b2f6670d0a8",
+    "ssd_config.h": "69c0be471e85444b079182cbb7d90d7e4616196f11f7a373d3cb97e03181742a",
+    "channel_model.c": "e32f7f9f71886f890699b336e4f1f6fb1efaf51dafaeba873b71ea1049530d99",
+    "onfi_model.h": "f871592631a235bb349e8522d77ea3a4713c0e876ff955f3fb94c95738237eb7",
+    "fast24_ftl.c": "d23cff1c555261a21cfb15aab7981d87920f6f04c06796fed39fca67fa0a94e7",
+    "fast24_placement.h": "5cec87996d738bf9d64dca79060f6bb1561dea3af6c9caeac6344e59c6183755",
+    "Kbuild": "a4d02df6984239f141afbb52333011574cde9afec2a70f9fa3d7697de892a574",
+    "io.c": "67b7dfcfb8f7682a129293215f4d0f940b00226e289fae3fc849e22ff22a898f",
+    "admin.c": "6983c5ccced41e7accc6ae79c4502d1624d89a528d0481fa5c59c92b3147d454",
+    "evaluation_onfi_fast/runner.py": "d2376fa115822ff5109ccf8efce72d6030b1ac83d4d8d538a749cc5f3a84a22a",
+    "evaluation_onfi_fast/nvme_hint.c": "5066d0d9df2c0ebdcedb2dee635127065ef6249bb1972af7da0b2486f4ba9df1",
+    "evaluation_onfi_fast/read_pass.c": "5fbd7da3f9e8116342530fdcb7a86978a666394a925d1f9827745ce27b8df604",
+    "evaluation_onfi_fast/collision_probe.c": "b97fb11bc561182adbf8e844fe5274fbdf50ee58280430bf3da936020cd160c3"
+  },
+  "diagnostic": {
+    "iodepth": 64,
+    "commands": 16384,
+    "read_percent": 50,
+    "request_bytes": 32768,
+    "write_hints": "none",
+    "not_a_paper_workload": true
+  }
+}

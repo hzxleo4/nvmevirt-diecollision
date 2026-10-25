@@ -1,8 +1,8 @@
 # 16 GiB：ONFI 限制与 FAST ’24 放置策略
 
-当前结果来自 NVMeVirt 设备级方法复现。主机仍为原来的
-`6.8.0-138-generic`；没有安装或切换内核。论文的完整
-SQLite/Filebench 文件系统端到端复现尚未完成。
+当前结果包含 NVMeVirt 设备级方法复现，以及 SQLite/Filebench 的 ONFI 应用 A/B 测试。
+主机仍为 `6.8.0-138-generic`，没有安装或切换内核。应用测试两组 FAST 均关闭；
+带 FAST 文件提示的完整应用级复现尚未完成。
 
 完整逐项结果见[全部实验表](reports/all-experiments/ALL_RESULTS.zh-CN.md)，包括历史初测、冒烟、两轮诊断、全部延迟和失败/未完成项。
 
@@ -66,6 +66,40 @@ FAST 实现包括：追加时从文件前一块所在 die 的后继 die 开始�
 [正式报告](reports/main-16g-aio-v1/SUMMARY.md)及
 [吞吐图](reports/main-16g-aio-v1/throughput.png)。测试源码提交为 `e6aecf9`。
 
+## SQLite / Filebench：ONFI 应用实验
+
+已完成 18 次独立构造、60 次 SQLite 冷读和 12 次 Filebench 60 秒读取。
+两组 FAST 均关闭，使用原主机内核；每组每种应用重建 3 次。以下为均值 ± 样本标准差。
+
+| 工作负载 | 读指标 | ONFI 关 | ONFI 开 |
+|---|---|---:|---:|
+| SQLite | 全表 SELECT，ms | 281.224 ± 3.307 | 281.215 ± 1.372 |
+| Filebench，32 KiB 追加 | MiB/s | 2131.13 ± 20.92 | 2234.67 ± 256.08 |
+| Filebench，16 KiB 追加 | MiB/s | 1758.20 ± 3.18 | 1865.83 ± 113.67 |
+
+| 工作负载 | 构造秒：ONFI 关 | 构造秒：ONFI 开 | 开启组构造等待：次数 / ms | 开启组读取等待：次数 / ms |
+|---|---:|---:|---:|---:|
+| SQLite | 3.254 ± 0.821 | 2.933 ± 0.771 | 4 / 0.258193 | 2 / 0.080057 |
+| Filebench，32 KiB 追加 | 7.480 ± 0.269 | 7.240 ± 0.041 | 9 / 1.586728 | 0 / 0.000000 |
+| Filebench，16 KiB 追加 | 7.544 ± 0.292 | 7.558 ± 0.356 | 2 / 0.290782 | 0 / 0.000000 |
+
+等待计数和累计时间是三次构造或全部读取之和，累计等待不能直接当作应用墙钟损失。
+SQLite 读用时基本相同。Filebench 读吞吐均值分别高 4.86% / 6.12%，但读取阶段
+没有 program、GC 或 ONFI 等待；并发构造得到的布局不同，不能据此宣称 ONFI 带来加速。
+例如 32 KiB 组第一轮每 MiB 对应 NAND read 为 A=58.86、B=39.35，后两轮两组均接近 59。
+构造阶段仅触发少量等待，本轮没有形成明显的 ONFI 阻塞瓶颈，也未触发 GC。
+
+SQLite 首遍读会补齐 FTL 未满的闪存页，虽然主机 WRITE 增量为零，仍各有 3 次 NAND program；
+开启组其中 2 次触发 ONFI 等待，合计 0.080057 ms。首遍结果没有剔除。
+
+Filebench 为适配 16 GiB，固定追加 4 GiB，最终约 5.22 GiB 数据集；保留 10,000 文件、
+10 线程、32/16 KiB 追加和写后 60 秒读取。它不等同于论文的追加 60 秒 / 11 GB 数据集，
+结果不能外推到满盘和持续 GC。SQLite 在本机为 10,000 个 extent，与论文报告的 5,005 不同。
+
+[18 次构造和 72 次读取的全部表格、原始日志](reports/apps-onfi-16g-v1/SUMMARY.md)。
+[应用冒烟六项结果](reports/apps-smoke-v3/SUMMARY.md)；[开发失败批次记录](reports/apps-development/STATUS.md)。
+测试源码提交 `a0a8c50`；全部数据验证通过，模块和临时日志设备已卸载，VM 参数已恢复。
+
 ## ONFI 生效验证：单独的诊断工作负载
 
 为了验证“零等待”不是功能没生效，另做同 target、不同 die 的交错读写：
@@ -101,3 +135,5 @@ python3 evaluation_onfi_fast/summarize_probe.py evaluation_onfi_fast/results/new
 
 脚本只操作本轮新建、型号核验为 `NVMeVirt_FAST24` 的虚拟 namespace。
 原始结果留在本机 `evaluation_onfi_fast/results/`，汇总、图及运行清单纳入 Git。
+应用实验额外把原始日志、计数器和逐文件校验值归档到报告目录并纳入 Git。
+应用复跑见 [APPLICATIONS.zh-CN.md](APPLICATIONS.zh-CN.md)。

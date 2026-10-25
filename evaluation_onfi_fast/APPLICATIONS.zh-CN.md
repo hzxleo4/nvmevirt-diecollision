@@ -24,8 +24,9 @@ SQLite 链接本机库，版本写入结果。脚本自行实现相应参数和�
 | 验证 | 逐条检查 ID/所有字段及 integrity_check | 10,000 个文件前后大小与 SHA256 一致 | 同左 |
 
 每个用例重载模块、重新创建文件系统。按重复轮次交换 A/B 先后顺序。
-SQLite 同一轮 A/B 使用同一个确定性数据种子；Filebench 的线程调度和分配轨迹
-不能保证完全相同，需结合重复间离散程度与设备计数器解释结果。
+SQLite 同一轮 A/B 使用同一个确定性数据种子；manifest 中的 seed 只用于
+SQLite 数据内容。Filebench 沿用上游随机源，线程调度和分配轨迹不能保证
+完全相同，需结合重复间离散程度与设备计数器解释结果。
 SQLite 每次 SELECT 前执行两轮 sync、drop_caches、等待 5 秒；Filebench 读前
 清缓存并等待 5 秒。SHA256 校验不计入测量，校验后的缓存也在读前清除。
 
@@ -42,7 +43,8 @@ expire_centisecs=60000 在实验结束后恢复原值。
 可以提交约 5 GiB buffered append，直接追加 60 秒无法保证容纳在 16 GiB 中。
 因此正式实验用 `finishonbytes` 限定 4 GiB 追加操作，得到约 5.22 GiB 数据集，
 保留论文的 10,000 文件、10 线程、32/16 KiB 追加和写后读协议。
-不能将这个结果称为完整复现论文的 60 秒追加实验。
+这个数据集小于论文报告的 11 GB；不能将结果称为完整复现论文的
+60 秒追加实验，也不能外推到满盘或持续 GC 的情况。
 
 `finishonbytes` 检查共享计数器，多线程结束时存在少量超量操作。
 Filebench `appendfile` 本身使用 lseek + write，并非原子 O_APPEND，实际文件
@@ -66,6 +68,11 @@ ONFI wait_ns 是模拟器累计的排队等待，跨操作/通道可能重叠，
 应用按论文先写后读。如果读阶段没有 NAND program，ONFI 的 program-vs-read
 限制就没有触发条件。即便两组吞吐略有差异，也不能单凭差值归因为 ONFI。
 这个实验不增加两个 die 的人为交替，也不额外混入读写线程。
+
+`syncfs` 保证主机文件系统的写回，不等同于主动发出 NVMe FLUSH。当前控制器
+报告 VWC=0；FTL 尚未填满的 32 KiB 页可能留到首次读时补齐并 program
+（`fast24_ftl.c:fast_read`）。因此不能预先假定所有读取窗口的 program 数为零。
+报告同时检查主机 WRITE 增量、NAND program 和 GC，保留首遍读取的真实计数。
 
 ## 运行
 

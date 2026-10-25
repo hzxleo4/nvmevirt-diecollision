@@ -7,3 +7,7 @@ onfi-positive-16g-v2,passed,12,
 onfi-positive-16g-v3,passed,12,
 smoke-v1,failed,0,unexpected replay length: /home/hzx/Github_Program/nvmevirt/evaluation_onfi_fast/results/smoke-v1/r1/A/append_worst/read1.json
 smoke-v2,passed,8,
+apps-smoke-v1,failed,2,Filebench error in /home/hzx/Github_Program/nvmevirt/evaluation_onfi_fast/results/apps-smoke-v1/r1/A/fileserver/append.log
+apps-smoke-v2,failed,2,unexpected append volume: 33501184
+apps-smoke-v3,passed,6,
+apps-onfi-16g-v1,passed,18,

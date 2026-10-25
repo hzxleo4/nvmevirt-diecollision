@@ -1,0 +1,7 @@
+workload,group,repeat,construction_s,dataset_MiB,read_throughput,read_unit,read_latency_ms,nand_reads_per_MiB,build_onfi_events,build_onfi_ns,build_programs,build_reads,build_gc,read_onfi_events,read_onfi_ns,read_programs,read_reads,read_gc
+sqlite,A,1,0.047736576,1.625,25515.137871,records/s,3.9192419999999997,103.38461538461539,0,0,403,1,0,0,0,0,168,0
+sqlite,B,1,0.046115554,1.625,28871.669188,records/s,3.463603,103.38461538461539,0,0,403,1,0,0,0,0,168,0
+fileserver,A,1,3.1595790889987256,44.48046875,2157.6,MiB/s,2.0,55.30746605496126,0,0,1438,1,0,0,0,0,238941,0
+fileserver,B,1,3.1558020529992064,44.40234375,2083.2,MiB/s,2.1,57.159874361553285,0,0,1436,10,0,0,0,0,238425,0
+fileserver_small,A,1,3.155667918999825,44.296875,1785.2,MiB/s,2.4,79.49748691007946,0,0,1432,1,0,0,0,0,284206,0
+fileserver_small,B,1,3.1668302090001816,44.3359375,1741.5,MiB/s,2.5,82.32319222998248,0,0,1434,1,0,0,0,0,287124,0

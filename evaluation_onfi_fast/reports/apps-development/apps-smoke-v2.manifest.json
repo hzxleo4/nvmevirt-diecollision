@@ -1,0 +1,84 @@
+{
+  "suite": "stock_host_applications_onfi_only",
+  "status": "failed",
+  "smoke": true,
+  "git_head": "647a7d1f318997b788c93b9626f5cad12bf3aa51",
+  "git_status": "?? evaluation_onfi_fast/prepare_filebench.sh\n?? evaluation_onfi_fast/run_applications.py\n?? evaluation_onfi_fast/sqlite_workload.c",
+  "kernel": "6.8.0-138-generic",
+  "physical_bytes": 17179869184,
+  "fast_placement": false,
+  "cpus": "7,8,9,10",
+  "host_cpus": "0,1,2,3,4,5",
+  "filebench_commit": "1263cb180c48a63253345a12e2b842cd9f85fa26",
+  "filebench_sha256": "5fb7d8284ef33fe1a2953868718ab8a4f60038c7b982f637df4193e7e7cea290",
+  "records": 100,
+  "files": 100,
+  "sql_reads": 1,
+  "cache_wait_seconds": 0.1,
+  "append_mib": 32,
+  "append_timeout": 300,
+  "read_seconds": 2,
+  "plan": [
+    {
+      "repeat": 1,
+      "workload": "sqlite",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027
+    },
+    {
+      "repeat": 1,
+      "workload": "sqlite",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027
+    },
+    {
+      "repeat": 1,
+      "workload": "fileserver",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027
+    },
+    {
+      "repeat": 1,
+      "workload": "fileserver",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027
+    },
+    {
+      "repeat": 1,
+      "workload": "fileserver_small",
+      "group": "A",
+      "onfi": 0,
+      "seed": 20261027
+    },
+    {
+      "repeat": 1,
+      "workload": "fileserver_small",
+      "group": "B",
+      "onfi": 1,
+      "seed": 20261027
+    }
+  ],
+  "ext4": "4KiB, nodelalloc,noatime, external 512MiB tmpfs loop journal, no lazy itable init",
+  "vm_settings": {
+    "dirty_background_ratio": "50",
+    "dirty_ratio": "50",
+    "dirty_writeback_centisecs": "0",
+    "dirty_expire_centisecs": "60000"
+  },
+  "notes": [
+    "FAST placement disabled in both groups; stock host supplies no file hints",
+    "Paper append duration 60s; author artifact uses 30s",
+    "16 GiB capacity adaptation: fixed append byte budget, not timed unlimited append",
+    "finishonbytes checks a shared counter; a few concurrent operations may overshoot",
+    "Filebench counters cover creation+append+drain; throughput is its timed append phase"
+  ],
+  "source_sha256": {
+    "run_applications.py": "3ed7e5a024f533f6896bb3d581c8af92aacb0f28d74d9e49ff0517635bfeaebc",
+    "sqlite_workload.c": "16507b6a4adba1b62e0759aae547f4689abf4b54dfcc30119067c80a94d7f362"
+  },
+  "error": "unexpected append volume: 33501184"
+}

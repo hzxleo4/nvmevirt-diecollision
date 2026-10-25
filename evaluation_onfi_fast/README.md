@@ -54,9 +54,14 @@ not a symmetric read/program exclusion throughout tPROG.
 2. Explicit NVMe write hints allow controlled append/overwrite mechanism
    experiments on the stock kernel. These are device-level experiments, not
    ext4 or SQLite/Filebench end-to-end reproductions.
-3. Full filesystem/application experiments require the FAST host hint path
+3. Filesystem/application experiments with FAST placement require the FAST host hint path
    through ext4, the block layer and NVMe. The runner must reject an unmodified
    host for that suite, rather than silently label an unhinted run as FAST-on.
+4. ONFI-only SQLite/Filebench A/B experiments run on the stock host with
+   `fast_placement=0` in both groups. See [application protocol](APPLICATIONS.zh-CN.md).
+   They use fresh ext4 namespaces, independent reconstructions and separate
+   construction/read counters. Filebench uses a 4 GiB append budget to fit the
+   16 GiB reservation; this differs from the paper's timed unlimited append.
 
 Never run the upstream artifact's hard-coded real-device wipe scripts here.
 All device writes must target a newly created and verified NVMeVirt namespace.
@@ -68,6 +73,15 @@ Per the user's scope preference, active changes stay in NVMeVirt and the test
 programs; host-kernel adaptation is deferred. The stock host kernel is unchanged.
 The tested result is a device-method reproduction with explicit hints, not a
 claim that unmodified SQLite/Filebench supplies the paper's filesystem hints.
+
+The [stock-host application report](reports/apps-onfi-16g-v1/SUMMARY.md) now adds
+18 validated ONFI-only constructions, 60 cold SQLite SELECTs and twelve 60-second
+Filebench reads. SQLite SELECT time is essentially unchanged (281.224 vs
+281.215 ms). Both Filebench variants have zero read-phase ONFI waits; their
+observed throughput differences include different layouts from concurrent
+construction. Small construction waits are reported separately. All repetitions,
+raw counters, logs and validation hashes are retained; this does not constitute
+the FAST-hinted application experiment.
 
 The primary measured report is [main-16g-aio-v1](reports/main-16g-aio-v1/SUMMARY.md):
 three independent constructions per group/layout, ten complete reads each,

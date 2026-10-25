@@ -1,0 +1,7 @@
+workload,group,repeat,read,throughput,unit,duration_s,latency_ms,host_write_commands,host_read_4k_pages,onfi_events,onfi_ns,programs,reads,gc,nand_reads_per_MiB
+sqlite,A,1,1,25515.137871,records/s,0.003919242,3.9192419999999997,0,416,0,0,0,168,0,103.38461538461539
+sqlite,B,1,1,28871.669188,records/s,0.003463603,3.463603,0,416,0,0,0,168,0,103.38461538461539
+fileserver,A,1,1,2157.6,MiB/s,2,2.0,0,1105979,0,0,0,238941,0,55.30746605496126
+fileserver,B,1,1,2083.2,MiB/s,2,2.1,0,1067826,0,0,0,238425,0,57.159874361553285
+fileserver_small,A,1,1,1785.2,MiB/s,2,2.4,0,915208,0,0,0,284206,0,79.49748691007946
+fileserver_small,B,1,1,1741.5,MiB/s,2,2.5,0,892868,0,0,0,287124,0,82.32319222998248

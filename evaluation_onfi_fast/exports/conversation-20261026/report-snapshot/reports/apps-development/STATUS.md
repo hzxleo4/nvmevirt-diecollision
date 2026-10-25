@@ -1,0 +1,16 @@
+# 应用实验开发批次
+
+这些批次保留用于审计，不混入正式性能结果。
+
+| 批次 | 状态 | 已完成部分 | 停止原因与处理 |
+|---|---|---|---|
+| apps-smoke-v1 | 失败 | SQLite A/B 的 100 条记录及冷读通过 | Filebench 未安装 cvar 目录，日志检查拒绝结果；增加本地 make install。该次 2 秒追加约 5 GiB，也表明需要 16 GiB 容量适配。 |
+| apps-smoke-v2 | 失败 | SQLite A/B 通过，Filebench A 完成 32 MiB 追加操作 | 文件增长量约 31.95 MiB，严格等值检查失败；核对上游 lseek+write 与并发结束行为后，记录操作字节和实际文件增长，正式实验限制偏差不超过 1%。 |
+| apps-smoke-v3 | 通过 | 六个 SQLite/Filebench A/B 用例及数据验证全部通过 | 见[完整冒烟结果](../../../../../reports/apps-smoke-v3/SUMMARY.md)。100 条/100 文件、32 MiB 追加、2 秒读，不属于正式性能数据。 |
+
+在 v3 前还根据 Filebench 源码修正了读取配置：`reuse` 增加 `trusttree`，
+避免预分配把追加后的文件截短；读取前后对全部文件做大小和 SHA256 校验。
+没有发生“截短后仍作为成功读测”的报告。
+
+两个失败批次都执行了清理，并恢复原来的 VM 参数。其运行清单、日志和计数器
+保存在[原始开发日志归档](../../../../../reports/apps-development/raw-results.tar.gz)。归档不含虚拟盘数据或编译二进制。

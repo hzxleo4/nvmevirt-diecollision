@@ -1,0 +1,21 @@
+{
+  "base_commit": "bcfebf1480ae70eeee389cb095820b7af1772a4b",
+  "timezone": "Asia/Shanghai",
+  "first_message_utc": "2026-10-25T11:43:22.391Z",
+  "last_message_utc": "2026-10-25T21:22:16.768Z",
+  "messages": 111,
+  "user_messages": 17,
+  "assistant_messages": 94,
+  "assistant_phases": {
+    "commentary": 81,
+    "final_answer": 13
+  },
+  "markdown_snapshots": 17,
+  "credentials_redacted": true,
+  "excluded": [
+    "system/developer messages",
+    "reasoning",
+    "raw tool logs",
+    "PDF attachment binaries"
+  ]
+}

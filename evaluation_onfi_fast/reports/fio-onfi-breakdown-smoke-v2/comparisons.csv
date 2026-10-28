@@ -1,0 +1,5 @@
+case,comparison,base,treatment,throughput_change_percent
+4k-r70-qd32,ONFI，无 FAST,A,B,-12.962962962962955
+4k-r50-qd32,ONFI，无 FAST,A,B,-13.207547169811317
+4k-r30-qd32,ONFI，无 FAST,A,B,-7.692307692307687
+32k-r50-qd32,ONFI，无 FAST,A,B,-16.666666666666675

@@ -51,8 +51,20 @@ struct fast_ftl {
 	u64 writes, append_hints, overwrite_hints, applied_hints, missing_hints;
 	u64 rejected, read_pages;
 	u64 inferred_candidates, inferred_applied, inferred_changed;
+	u64 diag_write_attempts, diag_buffer_retries, diag_host_reads, diag_host_writes;
+	u64 diag_read_model_ns, diag_write_model_ns, diag_read_partial_flushes;
 	bool placement, infer_overwrite;
 };
+
+static bool fast_diag_active(struct fast_ftl *f)
+{
+#ifdef NVMEV_FAST24_TEST
+	(void)f;
+	return false;
+#else
+	return ssd_diag_active(&f->ssd);
+#endif
+}
 
 static u32 die_id(struct fast_ftl *f, struct ppa p)
 {
@@ -288,8 +300,13 @@ static bool fast_write(struct nvmev_ns *ns, struct nvmev_request *req,
 		f->rejected++;
 		return true;
 	}
-	if (buffer_allocate(f->ssd.write_buffer, bytes) < bytes)
+	if (fast_diag_active(f))
+		f->diag_write_attempts++;
+	if (buffer_allocate(f->ssd.write_buffer, bytes) < bytes) {
+		if (fast_diag_active(f))
+			f->diag_buffer_retries++;
 		return false;
+	}
 	ingress = ssd_advance_write_buffer(&f->ssd, req->nsecs_start, bytes);
 	end = ingress;
 	f->writes++;
@@ -344,6 +361,10 @@ static bool fast_write(struct nvmev_ns *ns, struct nvmev_request *req,
 	if (control & NVME_RW_FUA)
 		end = flush_all(f, end, req->sq_id);
 	ret->nsecs_target = control & NVME_RW_FUA ? end : ingress;
+	if (fast_diag_active(f)) {
+		f->diag_host_writes++;
+		f->diag_write_model_ns += ret->nsecs_target - req->nsecs_start;
+	}
 	ret->status = NVME_SC_SUCCESS;
 	return true;
 }
@@ -375,8 +396,11 @@ static void fast_read(struct nvmev_ns *ns, struct nvmev_request *req,
 			u64 ready = start;
 			if (c->pending && c->block == prev.g.blk &&
 			    (c->page - c->pending) / s->pgs_per_flashpg ==
-				prev.g.pg / s->pgs_per_flashpg)
+				prev.g.pg / s->pgs_per_flashpg) {
+				if (fast_diag_active(f))
+					f->diag_read_partial_flushes++;
 				ready = close_flash_page(f, die_id(f, prev), false, start, req->sq_id);
+			}
 			end = max(end, flash_cmd(f, prev, NAND_READ, USER_IO, ready, bytes, true));
 			bytes = 0;
 		}
@@ -386,6 +410,10 @@ static void fast_read(struct nvmev_ns *ns, struct nvmev_request *req,
 			bytes += s->pgsz;
 			f->read_pages++;
 		}
+	}
+	if (fast_diag_active(f)) {
+		f->diag_host_reads++;
+		f->diag_read_model_ns += end - req->nsecs_start;
 	}
 	ret->status = NVME_SC_SUCCESS;
 	ret->nsecs_target = end;
@@ -479,6 +507,9 @@ void fast24_debug(struct seq_file *m, struct nvmev_ns *ns)
 		f->ssd.onfi_collision, f->placement, f->writes, f->append_hints,
 		f->overwrite_hints, f->applied_hints, f->missing_hints, f->rejected, f->read_pages,
 		f->infer_overwrite, f->inferred_candidates, f->inferred_applied, f->inferred_changed);
+	seq_printf(m, "host_diag write_attempts=%llu buffer_retries=%llu reads=%llu writes=%llu read_model_ns=%llu write_model_ns=%llu read_partial_flushes=%llu\n",
+		f->diag_write_attempts, f->diag_buffer_retries, f->diag_host_reads, f->diag_host_writes,
+		f->diag_read_model_ns, f->diag_write_model_ns, f->diag_read_partial_flushes);
 	for (ch = 0; ch < f->ssd.sp.nchs; ch++) {
 		struct ssd_channel *c = &f->ssd.ch[ch];
 		struct onfi_target t;
@@ -495,4 +526,15 @@ void fast24_debug(struct seq_file *m, struct nvmev_ns *ns)
 			die, d->reads, d->programs, d->erases, d->gc_count, d->gc_pages,
 			d->live_pages, d->free_blocks);
 	}
+#ifndef NVMEV_FAST24_TEST
+	ssd_diag_show(m, &f->ssd, false);
+#endif
 }
+
+#ifndef NVMEV_FAST24_TEST
+void fast24_trace(struct seq_file *m, struct nvmev_ns *ns)
+{
+	struct fast_ftl *f = ns->ftls;
+	ssd_diag_show(m, &f->ssd, true);
+}
+#endif

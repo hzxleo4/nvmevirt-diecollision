@@ -3,6 +3,8 @@
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/sched/clock.h>
+#include <linux/seq_file.h>
+#include <linux/vmalloc.h>
 
 #include "nvmev.h"
 #include "ssd.h"
@@ -11,6 +13,24 @@ static bool onfi_collision;
 module_param(onfi_collision, bool, 0444);
 MODULE_PARM_DESC(onfi_collision,
 	"ONFI page-register restriction; one target per channel; reload to switch");
+
+static bool onfi_diagnostics;
+static bool onfi_diag_active;
+static unsigned int onfi_trace_limit = 512;
+static unsigned int onfi_trace_skip = 2048;
+module_param(onfi_diagnostics, bool, 0444);
+module_param(onfi_diag_active, bool, 0644);
+module_param(onfi_trace_limit, uint, 0444);
+module_param(onfi_trace_skip, uint, 0444);
+MODULE_PARM_DESC(onfi_diagnostics, "Allocate optional NAND timing observers; default off");
+MODULE_PARM_DESC(onfi_diag_active, "Gate observation only; does not change NAND scheduling");
+MODULE_PARM_DESC(onfi_trace_limit, "Bounded trace entries per channel, maximum 4096");
+MODULE_PARM_DESC(onfi_trace_skip, "Skip this many observed NAND commands per channel before tracing");
+
+bool ssd_diag_active(struct ssd *ssd)
+{
+	return ssd->ch[0].diag && READ_ONCE(onfi_diag_active);
+}
 
 static inline uint64_t __get_ioclock(struct ssd *ssd)
 {
@@ -248,6 +268,8 @@ static void ssd_init_nand_lun(struct nand_lun *lun, struct ssdparams *spp)
 	lun->next_lun_avail_time = 0;
 	lun->gc_endtime = 0;
 	lun->busy = false;
+	lun->diag_seq = 0;
+	lun->diag_op = ND_OTHER;
 }
 
 static void ssd_remove_nand_lun(struct nand_lun *lun)
@@ -264,6 +286,7 @@ static void ssd_init_ch(struct ssd_channel *ch, struct ssdparams *spp)
 {
 	int i;
 	ch->onfi = (struct onfi_target){};
+	ch->diag = NULL;
 	spin_lock_init(&ch->timing_lock);
 	ch->nluns = spp->luns_per_ch;
 	ch->lun = kmalloc(sizeof(struct nand_lun) * ch->nluns, GFP_KERNEL);
@@ -276,6 +299,18 @@ static void ssd_init_ch(struct ssd_channel *ch, struct ssdparams *spp)
 
 	/* Add firmware overhead */
 	ch->perf_model->xfer_lat += (spp->fw_ch_xfer_lat * UNIT_XFER_SIZE / KB(4));
+	if (onfi_diagnostics) {
+		ch->diag = kzalloc(sizeof(*ch->diag), GFP_KERNEL);
+		NVMEV_ASSERT(ch->diag);
+		ch->diag->capacity = min(onfi_trace_limit, 4096U);
+		ch->diag->skip = onfi_trace_skip;
+		ch->diag->stats = kcalloc(ch->nluns * 2, sizeof(struct nd_stats), GFP_KERNEL);
+		NVMEV_ASSERT(ch->diag->stats);
+		if (ch->diag->capacity) {
+			ch->diag->trace = kvcalloc(ch->diag->capacity, sizeof(struct nd_event), GFP_KERNEL);
+			NVMEV_ASSERT(ch->diag->trace);
+		}
+	}
 }
 
 static void ssd_remove_ch(struct ssd_channel *ch)
@@ -283,6 +318,11 @@ static void ssd_remove_ch(struct ssd_channel *ch)
 	int i;
 
 	kfree(ch->perf_model);
+	if (ch->diag) {
+		kvfree(ch->diag->trace);
+		kfree(ch->diag->stats);
+		kfree(ch->diag);
+	}
 
 	for (i = 0; i < ch->nluns; i++)
 		ssd_remove_nand_lun(&ch->lun[i]);
@@ -369,6 +409,21 @@ uint64_t ssd_advance_write_buffer(struct ssd *ssd, uint64_t request_time, uint64
 	return nsecs_latest;
 }
 
+/* Observe the existing credit model after its call. Its cur_time is the
+ * exact clock used for late-request clamping, and xfer_lat already includes
+ * firmware transfer cost. Do not call the scheduler a second time. */
+static void nd_bus(struct nd_event *e, struct channel_model *ch,
+		   u64 requested, u64 completed, u64 bytes)
+{
+	u64 late = nd_wait(ch->cur_time, requested);
+	u64 service = ch->xfer_lat * DIV_ROUND_UP(bytes, UNIT_XFER_SIZE);
+	u64 elapsed = completed - requested;
+	e->stage[ND_CH_LATE] += late;
+	e->stage[ND_CH_SERVICE] += service;
+	if (elapsed >= late + service)
+		e->stage[ND_CH_QUEUE] += elapsed - late - service;
+}
+
 uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 {
 	int c = ncmd->cmd;
@@ -382,6 +437,8 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 	struct ppa *ppa = ncmd->ppa;
 	uint32_t cell;
 	unsigned long flags;
+	struct nd_event event;
+	bool observe;
 	NVMEV_DEBUG(
 		"SSD: %p, Enter stime: %lld, ch %d lun %d blk %d page %d command %d ppa 0x%llx\n",
 		ssd, ncmd->stime, ppa->g.ch, ppa->g.lun, ppa->g.blk, ppa->g.pg, c, ppa->ppa);
@@ -398,12 +455,34 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 	remaining = ncmd->xfer_size;
 	completed_time = chnl_etime = cmd_stime;
 	spin_lock_irqsave(&ch->timing_lock, flags);
+	observe = ch->diag && READ_ONCE(onfi_diag_active) &&
+		(c == NAND_READ || c == NAND_WRITE);
+	if (observe) {
+		struct nd_event *r = &ch->diag->last_read;
+		event = (struct nd_event){ .seq = ++ch->diag->seen,
+			.start = cmd_stime, .lun = ppa->g.lun,
+			.op = c == NAND_READ ? ND_READ : ND_PROGRAM,
+			.bytes = ncmd->xfer_size, .io_type = ncmd->type,
+			.previous_seq = lun->diag_seq, .previous_op = lun->diag_op,
+			.blocker_seq = r->seq, .blocker_lun = r->lun,
+			.blocker_start = r->start, .blocker_array_start = r->array_start,
+			.blocker_array_end = r->array_end,
+			.blocker_end = ch->onfi.read_data_until };
+	}
 
 	switch (c) {
 	case NAND_READ:
 		/* read: perform NAND cmd first */
 		nand_stime = max(lun->next_lun_avail_time, cmd_stime);
+		if (observe) {
+			event.lun_ready = nand_stime;
+			event.stage[ND_LUN] = nand_stime - cmd_stime;
+		}
 		nand_stime = onfi_read_start(&ch->onfi, nand_stime);
+		if (observe) {
+			event.input_ready = event.onfi_ready = event.array_start = nand_stime;
+			event.stage[ND_INPUT] = nand_stime - event.lun_ready;
+		}
 
 		if (ncmd->xfer_size == 4096) {
 			nand_etime = nand_stime + spp->pg_4kb_rd_lat[cell];
@@ -413,10 +492,16 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 
 		/* read: then data transfer through channel */
 		chnl_stime = nand_etime;
+		if (observe) {
+			event.array_end = event.data_start = nand_etime;
+			event.stage[ND_ARRAY] = nand_etime - nand_stime;
+		}
 
 		while (remaining) {
 			xfer_size = min(remaining, (uint64_t)spp->max_ch_xfer_size);
 			chnl_etime = chmodel_request(ch->perf_model, chnl_stime, xfer_size);
+			if (observe)
+				nd_bus(&event, ch->perf_model, chnl_stime, chnl_etime, xfer_size);
 
 			if (ncmd->interleave_pci_dma) { /* overlap pci transfer with nand ch transfer*/
 				completed_time = ssd_advance_pcie(ssd, chnl_etime, xfer_size);
@@ -430,16 +515,34 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 
 		lun->next_lun_avail_time = chnl_etime;
 		onfi_read_done(&ch->onfi, chnl_etime);
+		if (observe) {
+			event.data_end = chnl_etime;
+			event.stage[ND_PCIE] = nd_wait(completed_time, chnl_etime);
+		}
 		break;
 
 	case NAND_WRITE:
 		/* write: transfer data through channel first */
 		chnl_stime = max(lun->next_lun_avail_time, cmd_stime);
+		if (observe) {
+			event.lun_ready = chnl_stime;
+			event.stage[ND_LUN] = chnl_stime - cmd_stime;
+		}
 		chnl_stime = max(chnl_stime, ch->onfi.program_input_until);
+		if (observe) {
+			event.input_ready = chnl_stime;
+			event.stage[ND_INPUT] = chnl_stime - event.lun_ready;
+		}
 		chnl_stime = onfi_program_start(&ch->onfi, chnl_stime,
 						ssd->onfi_collision);
+		if (observe) {
+			event.onfi_ready = event.data_start = chnl_stime;
+			event.stage[ND_ONFI] = chnl_stime - event.input_ready;
+		}
 
 		chnl_etime = chmodel_request(ch->perf_model, chnl_stime, ncmd->xfer_size);
+		if (observe)
+			nd_bus(&event, ch->perf_model, chnl_stime, chnl_etime, ncmd->xfer_size);
 		onfi_program_input_done(&ch->onfi, chnl_etime);
 
 		/* write: then do NAND program */
@@ -447,6 +550,11 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 		nand_etime = nand_stime + spp->pg_wr_lat;
 		lun->next_lun_avail_time = nand_etime;
 		completed_time = nand_etime;
+		if (observe) {
+			event.data_end = event.array_start = chnl_etime;
+			event.array_end = nand_etime;
+			event.stage[ND_ARRAY] = nand_etime - nand_stime;
+		}
 		break;
 
 	case NAND_ERASE:
@@ -469,8 +577,77 @@ uint64_t ssd_advance_nand(struct ssd *ssd, struct nand_cmd *ncmd)
 		completed_time = cmd_stime;
 	}
 
+	if (observe) {
+		struct nand_diagnostics *d = ch->diag;
+		event.end = completed_time;
+		nd_record(&d->stats[ppa->g.lun * 2 + event.op], &event);
+		lun->diag_seq = event.seq;
+		lun->diag_op = event.op;
+		if (event.op == ND_READ && event.data_end >= ch->onfi.read_data_until)
+			d->last_read = event;
+		if (d->seen > d->skip && d->recorded < d->capacity)
+			d->trace[d->recorded++] = event;
+	}
 	spin_unlock_irqrestore(&ch->timing_lock, flags);
 	return completed_time;
+}
+
+void ssd_diag_show(struct seq_file *m, struct ssd *ssd, bool trace)
+{
+	u32 ch, lun, op, i;
+	static const char *names[] = {"lun_ns", "input_ns", "onfi_ns", "array_ns",
+		"channel_late_ns", "channel_queue_ns", "channel_service_ns", "pcie_tail_ns"};
+	seq_printf(m, "nand_diag enabled=%u active=%u trace_limit=%u trace_skip=%u\n",
+		!!ssd->ch[0].diag, READ_ONCE(onfi_diag_active), min(onfi_trace_limit, 4096U), onfi_trace_skip);
+	for (ch = 0; ch < ssd->sp.nchs; ch++) {
+		struct ssd_channel *c = &ssd->ch[ch];
+		struct nand_diagnostics *d = c->diag;
+		unsigned long flags;
+		u64 seen, recorded;
+		if (!d)
+			continue;
+		spin_lock_irqsave(&c->timing_lock, flags);
+		seen = d->seen;
+		recorded = d->recorded;
+		spin_unlock_irqrestore(&c->timing_lock, flags);
+		seq_printf(m, "nand_window channel=%u seen=%llu recorded=%llu\n", ch, seen, recorded);
+		if (trace) {
+			for (i = 0; i < recorded; i++) {
+				struct nd_event e;
+				u32 stage;
+				spin_lock_irqsave(&c->timing_lock, flags);
+				e = d->trace[i];
+				spin_unlock_irqrestore(&c->timing_lock, flags);
+				seq_printf(m, "nand_event channel=%u lun=%u seq=%llu op=%u bytes=%u io_type=%u start=%llu lun_ready=%llu input_ready=%llu onfi_ready=%llu array_start=%llu array_end=%llu data_start=%llu data_end=%llu end=%llu previous_op=%u previous_seq=%llu blocker_lun=%u blocker_seq=%llu blocker_start=%llu blocker_array_start=%llu blocker_array_end=%llu blocker_end=%llu",
+					ch, e.lun, e.seq, e.op, e.bytes, e.io_type, e.start, e.lun_ready,
+					e.input_ready, e.onfi_ready, e.array_start, e.array_end, e.data_start,
+					e.data_end, e.end, e.previous_op, e.previous_seq, e.blocker_lun,
+					e.blocker_seq, e.blocker_start, e.blocker_array_start, e.blocker_array_end, e.blocker_end);
+				for (stage = 0; stage < ND_STAGES; stage++)
+					seq_printf(m, " %s=%llu", names[stage], e.stage[stage]);
+				seq_putc(m, '\n');
+			}
+			continue;
+		}
+		for (lun = 0; lun < c->nluns; lun++) for (op = 0; op < 2; op++) {
+			struct nd_stats s;
+			spin_lock_irqsave(&c->timing_lock, flags);
+			s = d->stats[lun * 2 + op];
+			spin_unlock_irqrestore(&c->timing_lock, flags);
+			seq_printf(m, "nand_breakdown channel=%u lun=%u op=%u ops=%llu bytes=%llu total_ns=%llu invalid=%llu lun_events=%llu after_read_ns=%llu after_program_ns=%llu after_other_ns=%llu onfi_events=%llu cross_events=%llu same_events=%llu opportunity_events=%llu opportunity_ns=%llu",
+				ch, lun, op, s.ops, s.bytes, s.total_ns, s.invalid, s.lun_events,
+				s.after_read_ns, s.after_program_ns, s.after_other_ns, s.onfi_events,
+				s.cross_events, s.same_events, s.opportunity_events, s.opportunity_ns);
+			for (i = 0; i < ND_STAGES; i++)
+				seq_printf(m, " %s=%llu", names[i], s.stage[i]);
+			seq_printf(m, " blocker_queued_ns=%llu blocker_sense_ns=%llu blocker_output_ns=%llu",
+				s.blocker_queued_ns, s.blocker_sense_ns, s.blocker_output_ns);
+			seq_putc(m, '\n');
+			for (i = 0; i < ND_BINS; i++)
+				seq_printf(m, "nand_hist channel=%u lun=%u op=%u bin=%u onfi=%llu same_lun=%llu total=%llu\n",
+					ch, lun, op, i, s.onfi_hist[i], s.lun_hist[i], s.total_hist[i]);
+		}
+	}
 }
 
 uint64_t ssd_next_idle_time(struct ssd *ssd)

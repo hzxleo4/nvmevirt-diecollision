@@ -8,6 +8,7 @@
 #include "ssd_config.h"
 #include "channel_model.h"
 #include "onfi_model.h"
+#include "nand_diag.h"
 /*
     Default malloc size (when sector size is 512B)
     Channel = 40 * 8 = 320
@@ -110,6 +111,16 @@ struct nand_lun {
 	uint64_t next_lun_avail_time;
 	bool busy;
 	uint64_t gc_endtime;
+	unsigned long long diag_seq;
+	unsigned int diag_op;
+};
+
+struct nand_diagnostics {
+	struct nd_stats *stats; /* two operation classes per LUN */
+	struct nd_event *trace;
+	struct nd_event last_read;
+	u64 seen, recorded;
+	unsigned int capacity, skip;
 };
 
 struct ssd_channel {
@@ -119,6 +130,7 @@ struct ssd_channel {
 	struct channel_model *perf_model;
 	struct onfi_target onfi;
 	spinlock_t timing_lock;
+	struct nand_diagnostics *diag;
 };
 
 struct ssd_pcie {
@@ -221,6 +233,10 @@ struct ssd {
 	unsigned int cpu_nr_dispatcher;
 	bool onfi_collision;
 };
+
+struct seq_file;
+bool ssd_diag_active(struct ssd *ssd);
+void ssd_diag_show(struct seq_file *m, struct ssd *ssd, bool trace);
 
 static inline struct ssd_channel *get_ch(struct ssd *ssd, struct ppa *ppa)
 {

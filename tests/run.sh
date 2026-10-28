@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$(mktemp -d /tmp/nvmev-model-tests.XXXXXX)"
 trap 'rm -rf "$BUILD"' EXIT
-for name in onfi placement; do
+for name in onfi placement nand_diag; do
     cc -std=c11 -O2 -Wall -Wextra -Werror "$ROOT/tests/test_${name}.c" -o "$BUILD/$name"
     "$BUILD/$name"
 done

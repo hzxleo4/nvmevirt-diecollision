@@ -358,6 +358,10 @@ static int __proc_file_read(struct seq_file *m, void *data)
 #ifdef CONFIG_NVMEVIRT_FAST24
 		fast24_debug(m, &nvmev_vdev->ns[0]);
 #endif
+	} else if (strcmp(filename, "onfi_trace") == 0) {
+#ifdef CONFIG_NVMEVIRT_FAST24
+		fast24_trace(m, &nvmev_vdev->ns[0]);
+#endif
 	}
 
 	return 0;
@@ -464,6 +468,9 @@ static void NVMEV_STORAGE_INIT(struct nvmev_dev *nvmev_vdev)
 		proc_create("io_units", 0664, nvmev_vdev->proc_root, &proc_file_fops);
 	nvmev_vdev->proc_stat = proc_create("stat", 0444, nvmev_vdev->proc_root, &proc_file_fops);
 	nvmev_vdev->proc_debug = proc_create("debug", 0444, nvmev_vdev->proc_root, &proc_file_fops);
+#ifdef CONFIG_NVMEVIRT_FAST24
+	proc_create("onfi_trace", 0444, nvmev_vdev->proc_root, &proc_file_fops);
+#endif
 }
 
 static void NVMEV_STORAGE_FINAL(struct nvmev_dev *nvmev_vdev)
@@ -473,6 +480,9 @@ static void NVMEV_STORAGE_FINAL(struct nvmev_dev *nvmev_vdev)
 	remove_proc_entry("io_units", nvmev_vdev->proc_root);
 	remove_proc_entry("stat", nvmev_vdev->proc_root);
 	remove_proc_entry("debug", nvmev_vdev->proc_root);
+#ifdef CONFIG_NVMEVIRT_FAST24
+	remove_proc_entry("onfi_trace", nvmev_vdev->proc_root);
+#endif
 
 	remove_proc_entry("nvmev", NULL);
 

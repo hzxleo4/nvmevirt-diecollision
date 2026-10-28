@@ -4,4 +4,5 @@
 struct seq_file;
 struct nvmev_ns;
 void fast24_debug(struct seq_file *m, struct nvmev_ns *ns);
+void fast24_trace(struct seq_file *m, struct nvmev_ns *ns);
 #endif

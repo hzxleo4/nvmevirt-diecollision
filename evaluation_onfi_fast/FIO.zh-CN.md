@@ -53,3 +53,9 @@ python3 evaluation_onfi_fast/summarize_fio.py evaluation_onfi_fast/results/fio-o
 
 冒烟把工作集缩为 16 MiB、I/O 缩为 32 MiB，仅用于功能验证。
 正式运行保存源代码 SHA256、fio 命令/JSON、阶段计数、每秒采样和数据验证结果。
+
+## ONFI 深入分析
+
+新增的 [分解统计协议](ONFI_BREAKDOWN.zh-CN.md)保持 FAST 两项开关关闭，增加 QD 扫描、
+NAND 阶段等待、跨 LUN 阻塞关联以及无观察开销对照。
+[90 项正式结果和完整 breakdown](reports/fio-onfi-breakdown-16g-v1/SUMMARY.md)已完成。

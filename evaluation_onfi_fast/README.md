@@ -91,6 +91,19 @@ reads lose 11.61%, 22.21%, and 29.47% throughput with ONFI enabled; 32 KiB
 All cases use the same 2 GiB prefilled working set and 2 GiB measured I/O volume,
 with no GC. This is a separate ONFI experiment, not a FAST paper workload.
 
+The [ONFI diagnostic follow-up](reports/fio-onfi-breakdown-16g-v1/SUMMARY.md)
+adds 78 profiled trials and 12 interleaved unprofiled controls, with FAST
+disabled throughout. At QD32, ONFI reduces 4 KiB mixed throughput by
+10.75%, 22.17%, and 29.95% for 70%, 50%, and 30% reads; 32 KiB 50/50
+loses 17.33%. Exact NAND-command stage accounting and bounded real traces
+show cross-LUN read-to-program barriers propagating into later same-LUN
+read queues. In 4 KiB 50/50, 76.65% of direct ONFI wait precedes the
+blocking read's sensing: the existing future-resource reservation order
+contributes to the measured cost. This is not an unavoidable hardware
+penalty independent of scheduling. [Protocol](ONFI_BREAKDOWN.zh-CN.md) and
+[five figure sets](reports/fio-onfi-breakdown-16g-v1/FIGURES.md) document
+the queue-depth sweep, stage conservation and measurement overhead.
+
 The [four-group FAST fio report](reports/fio-fast-16g-v1/SUMMARY.md) adds 96
 validated runs with the default-off raw-LBA overwrite adapter enabled in every
 group. Only C/D apply the original-die policy. With ONFI enabled, FAST changes

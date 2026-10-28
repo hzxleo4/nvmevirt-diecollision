@@ -71,7 +71,13 @@ ONFI、同 die 等待与 NAND 总时延的直方图使用以微秒为单位的 2
 ./tests/run.sh
 sudo python3 evaluation_onfi_fast/run_fio.py --diagnostics --qd-sweep --diagnostic-controls 4k-r50-qd32 32k-r50-qd32 --out evaluation_onfi_fast/results/new-onfi-breakdown
 python3 evaluation_onfi_fast/summarize_onfi_breakdown.py evaluation_onfi_fast/results/new-onfi-breakdown --output evaluation_onfi_fast/reports/new-onfi-breakdown
+python3 evaluation_onfi_fast/plot_onfi_breakdown.py evaluation_onfi_fast/reports/new-onfi-breakdown
 ```
 
 单元测试验证分解守恒、同 die 忙时间遮蔽 ONFI、跨 die 阻塞、OFF 观察和桶边界；
 runner 对每项真实设备测试再次核对阶段之和、与原 ONFI 计数的一致性、NAND 操作数和事件时间线。
+
+## 已完成结果
+
+[90 项正式实验报告](reports/fio-onfi-breakdown-16g-v1/SUMMARY.md)、[全部图表](reports/fio-onfi-breakdown-16g-v1/FIGURES.md)。
+38 项开发冒烟与 90 项正式实验全部通过；原始日志、事件窗口和校验清单随报告归档。
